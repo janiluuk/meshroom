@@ -9,7 +9,7 @@ Web-based remote DJ/Ableton collaboration app for up to 4 people.
 - Basic 4-channel mixer controls for each participants.
 - Overdubbing individually or together
 - WebMIDI support for using your midi controller without external software
-- OBS Studio support for further broadcasting / processing
+- OBS Studio support for further broadcasting 
 - Easy Export results for further processing and mixdown.
 
 Early docker based development version, more accessible installer in plans once core features have been completed.
