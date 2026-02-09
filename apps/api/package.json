@@ -1,0 +1,22 @@
+{
+  "name": "@remote-dj/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.563.0",
+    "fastify": "^4.27.0",
+    "livekit-server-sdk": "^2.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

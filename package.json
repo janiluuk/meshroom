@@ -1,0 +1,25 @@
+{
+  "name": "remote-dj",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web \"pnpm --filter @remote-dj/api dev\" \"pnpm --filter @remote-dj/web dev\"",
+    "infra:up": "cd infra && docker compose up -d",
+    "infra:down": "cd infra && docker compose down",
+    "infra:logs": "cd infra && docker compose logs -f",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write .",
+    "smoke": "bash scripts/smoke.sh"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.11.0",
+    "@typescript-eslint/parser": "^7.11.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.2"
+  }
+}
