@@ -22,6 +22,17 @@ type MidiLabels = {
   output?: string;
 };
 
+type ParticipantMeta = {
+  role?: Role;
+  devices?: {
+    cam?: string;
+    mic?: string;
+    output?: string;
+    midiIn?: string;
+    midiOut?: string;
+  };
+};
+
 type MidiMessageEvent = {
   data: Uint8Array;
 };
@@ -55,6 +66,8 @@ type SessionResponse = {
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const midiInputStorageKey = "remote-dj:midi-input";
+const midiOutputStorageKey = "remote-dj:midi-output";
 
 const latencyClass = (rttMs?: number) => {
   if (!rttMs) {
@@ -176,6 +189,37 @@ const formatMidiData = (data: Uint8Array) => {
     .join(" ");
 };
 
+const pickFirstPublication = (publications: Iterable<TrackPublication>) => {
+  for (const publication of publications) {
+    if (publication.track) {
+      return publication;
+    }
+  }
+  return undefined;
+};
+
+const parseParticipantMeta = (metadata?: string | null): ParticipantMeta | null => {
+  if (!metadata) {
+    return null;
+  }
+  try {
+    return JSON.parse(metadata) as ParticipantMeta;
+  } catch (error) {
+    return null;
+  }
+};
+
+const getInitials = (value: string) => {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return "DJ";
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+};
+
 const getDeviceSnapshot = async (): Promise<DeviceSnapshot> => {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
     return {};
@@ -193,15 +237,6 @@ const getDeviceSnapshot = async (): Promise<DeviceSnapshot> => {
   };
 };
 
-const pickFirstTrack = (publications: Iterable<TrackPublication>) => {
-  for (const publication of publications) {
-    if (publication.track) {
-      return publication.track;
-    }
-  }
-  return undefined;
-};
-
 type ParticipantTileProps = {
   participant: Participant;
   isLocal: boolean;
@@ -209,6 +244,7 @@ type ParticipantTileProps = {
   stats?: ParticipantStats;
   deviceInfo?: DeviceSnapshot;
   midiLabels?: MidiLabels;
+  audioLevel?: number;
   version: number;
 };
 
@@ -219,20 +255,24 @@ const ParticipantTile = ({
   stats,
   deviceInfo,
   midiLabels,
+  audioLevel,
   version
 }: ParticipantTileProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const videoTrack = useMemo(() => {
+  const videoPublication = useMemo(() => {
     const publications = (participant as any).videoTrackPublications?.values?.() ?? [];
-    return pickFirstTrack(publications);
+    return pickFirstPublication(publications);
   }, [participant, version]);
 
-  const audioTrack = useMemo(() => {
+  const audioPublication = useMemo(() => {
     const publications = (participant as any).audioTrackPublications?.values?.() ?? [];
-    return pickFirstTrack(publications);
+    return pickFirstPublication(publications);
   }, [participant, version]);
+
+  const videoTrack = videoPublication?.track;
+  const audioTrack = audioPublication?.track;
 
   useEffect(() => {
     if (!videoRef.current || !videoTrack) {
@@ -256,21 +296,36 @@ const ParticipantTile = ({
 
   const connectionQuality = participant.connectionQuality ?? ConnectionQuality.Unknown;
   const identity = participant.identity || "Guest";
+  const metadata = parseParticipantMeta(participant.metadata);
+  const roleBadge = metadata?.role || (isLocal ? "local" : "peer");
+  const showAvatar = !videoTrack || videoPublication?.isMuted;
+  const audioLevelValue = Math.min(Math.max(audioLevel ?? 0, 0), 1);
 
   return (
     <div className="tile">
-      <div>
-        <video ref={videoRef} muted={isLocal} playsInline />
+      <div className="tile-media">
+        {showAvatar ? (
+          <div className="avatar">
+            <span>{getInitials(identity)}</span>
+          </div>
+        ) : (
+          <video ref={videoRef} muted={isLocal} playsInline />
+        )}
         <audio ref={audioRef} muted={isLocal} />
       </div>
       <div>
         <div className="tile-header">
-          <div className="tile-name">
-            {identity} {isLocal ? "(You)" : ""}
-          </div>
+          <div className="tile-name">{identity}</div>
           <div className="status-pill">{connectionState}</div>
         </div>
+        <div className="tile-sub">
+          <span className="role-badge">{roleBadge}</span>
+          {isLocal ? <span className="status-pill">You</span> : null}
+        </div>
         <div className="tile-body">
+          <div className="audio-meter">
+            <div className="audio-meter-fill" style={{ width: `${audioLevelValue * 100}%` }} />
+          </div>
           <div className="metric">
             <span>Connection</span>
             <strong>{ConnectionQuality[connectionQuality]}</strong>
@@ -291,11 +346,15 @@ const ParticipantTile = ({
             <strong>{formatPercent(stats?.packetLossPct)}</strong>
           </div>
           <div className="device-list">
-            <div>Cam: {deviceInfo?.cam || (isLocal ? "--" : "Remote")}</div>
-            <div>Mic: {deviceInfo?.mic || (isLocal ? "--" : "Remote")}</div>
-            <div>Output: {deviceInfo?.output || (isLocal ? "--" : "Remote")}</div>
-            <div>MIDI In: {midiLabels?.input || (isLocal ? "--" : "Remote")}</div>
-            <div>MIDI Out: {midiLabels?.output || (isLocal ? "--" : "Remote")}</div>
+            <div>Cam: {deviceInfo?.cam || metadata?.devices?.cam || (isLocal ? "--" : "Remote")}</div>
+            <div>Mic: {deviceInfo?.mic || metadata?.devices?.mic || (isLocal ? "--" : "Remote")}</div>
+            <div>Output: {deviceInfo?.output || metadata?.devices?.output || (isLocal ? "--" : "Remote")}</div>
+            <div>
+              MIDI In: {midiLabels?.input || metadata?.devices?.midiIn || (isLocal ? "--" : "Remote")}
+            </div>
+            <div>
+              MIDI Out: {midiLabels?.output || metadata?.devices?.midiOut || (isLocal ? "--" : "Remote")}
+            </div>
           </div>
         </div>
       </div>
@@ -327,6 +386,8 @@ const HomePage = () => {
   const [lastMidiMessage, setLastMidiMessage] = useState<string | null>(null);
   const [midiStatus, setMidiStatus] = useState<"idle" | "enabling" | "enabled" | "unsupported">("idle");
   const [midiError, setMidiError] = useState<string | null>(null);
+  const [audioLevels, setAudioLevels] = useState<Map<string, number>>(new Map());
+  const [sendMidiClock, setSendMidiClock] = useState(false);
 
   const [masterKey, setMasterKey] = useState("");
   const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
@@ -393,10 +454,14 @@ const HomePage = () => {
       return;
     }
     setMidiError(null);
-    const note = 60;
-    const velocity = 100;
-    output.send([0x90, note, velocity]);
-    window.setTimeout(() => output.send([0x80, note, 0]), 220);
+    try {
+      const note = 60;
+      const velocity = 100;
+      output.send([0x90, note, velocity]);
+      window.setTimeout(() => output.send([0x80, note, 0]), 220);
+    } catch (error) {
+      setMidiError("Failed to send MIDI note.");
+    }
   };
 
   const localMidiLabels = useMemo<MidiLabels>(() => {
@@ -409,6 +474,25 @@ const HomePage = () => {
   }, [midiInputs, midiOutputs, selectedMidiInputId, selectedMidiOutputId]);
 
   useEffect(() => {
+    if (!room) {
+      return;
+    }
+    const payload: ParticipantMeta = {
+      role,
+      devices: {
+        cam: deviceInfo.cam,
+        mic: deviceInfo.mic,
+        output: deviceInfo.output,
+        midiIn: localMidiLabels.input,
+        midiOut: localMidiLabels.output
+      }
+    };
+    room.localParticipant
+      .setMetadata(JSON.stringify(payload))
+      .catch(() => undefined);
+  }, [room, role, deviceInfo, localMidiLabels]);
+
+  useEffect(() => {
     if (typeof navigator === "undefined") {
       return;
     }
@@ -418,6 +502,42 @@ const HomePage = () => {
       setMidiStatus("unsupported");
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storedInput = window.localStorage.getItem(midiInputStorageKey);
+    const storedOutput = window.localStorage.getItem(midiOutputStorageKey);
+    if (storedInput) {
+      setSelectedMidiInputId(storedInput);
+    }
+    if (storedOutput) {
+      setSelectedMidiOutputId(storedOutput);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (selectedMidiInputId) {
+      window.localStorage.setItem(midiInputStorageKey, selectedMidiInputId);
+    } else {
+      window.localStorage.removeItem(midiInputStorageKey);
+    }
+  }, [selectedMidiInputId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (selectedMidiOutputId) {
+      window.localStorage.setItem(midiOutputStorageKey, selectedMidiOutputId);
+    } else {
+      window.localStorage.removeItem(midiOutputStorageKey);
+    }
+  }, [selectedMidiOutputId]);
 
   useEffect(() => {
     if (!midiAccess) {
@@ -446,6 +566,38 @@ const HomePage = () => {
       input.onmidimessage = null;
     };
   }, [midiInputs, selectedMidiInputId]);
+
+  useEffect(() => {
+    if (!sendMidiClock) {
+      return;
+    }
+    const output = midiOutputs.find((device) => device.id === selectedMidiOutputId);
+    if (!output) {
+      setMidiError("Select a MIDI output to send clock.");
+      setSendMidiClock(false);
+      return;
+    }
+    setMidiError(null);
+    const bpm = 120;
+    const intervalMs = 60000 / (bpm * 24);
+    const timer = window.setInterval(() => {
+      try {
+        output.send([0xf8]);
+      } catch (error) {
+        setMidiError("Failed to send MIDI clock.");
+        setSendMidiClock(false);
+      }
+    }, intervalMs);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [sendMidiClock, midiOutputs, selectedMidiOutputId]);
+
+  useEffect(() => {
+    if (midiStatus !== "enabled" && sendMidiClock) {
+      setSendMidiClock(false);
+    }
+  }, [midiStatus, sendMidiClock]);
 
   useEffect(() => {
     if (!room) {
@@ -483,6 +635,17 @@ const HomePage = () => {
       }
     }, 2000);
 
+    const audioInterval = window.setInterval(() => {
+      const levels = new Map<string, number>();
+      const all = [room.localParticipant, ...room.remoteParticipants.values()];
+      for (const participant of all) {
+        if (participant.identity) {
+          levels.set(participant.identity, participant.audioLevel ?? 0);
+        }
+      }
+      setAudioLevels(levels);
+    }, 200);
+
     return () => {
       room.off(RoomEvent.ParticipantConnected, handleRoomUpdate);
       room.off(RoomEvent.ParticipantDisconnected, handleRoomUpdate);
@@ -492,6 +655,7 @@ const HomePage = () => {
       room.off(RoomEvent.LocalTrackUnpublished, handleTrackChange);
       room.off(RoomEvent.ConnectionStateChanged, handleConnectionChange);
       window.clearInterval(statsInterval);
+      window.clearInterval(audioInterval);
     };
   }, [room, updateParticipants]);
 
@@ -663,6 +827,20 @@ const HomePage = () => {
             <strong>{isConnected ? `Connected: ${roomName}` : "Not connected"}</strong>
           </div>
         </div>
+        <div className="session-bar">
+          <div className="session-item">
+            <span>Tempo</span>
+            <strong>120 BPM</strong>
+          </div>
+          <div className="session-item">
+            <span>Transport</span>
+            <strong>Stopped</strong>
+          </div>
+          <div className="session-item">
+            <span>Quantize</span>
+            <strong>1/8</strong>
+          </div>
+        </div>
 
         <div className="join-card">
           <div className="form-grid">
@@ -725,7 +903,7 @@ const HomePage = () => {
         </div>
 
         <div className="join-card midi-card">
-          <div className="section-title">MIDI routing</div>
+          <div className="section-title">MIDI</div>
           <div className="notice">
             WebMIDI support varies by browser. Chrome/Edge are supported; Firefox and Safari often lack
             support. Check MDN or Can I use for the latest matrix.
@@ -796,8 +974,19 @@ const HomePage = () => {
                 <button className="ghost" onClick={sendTestNote} disabled={!selectedMidiOutputId}>
                   Send test note
                 </button>
+                <button
+                  className={sendMidiClock ? "toggle active" : "toggle"}
+                  type="button"
+                  onClick={() => setSendMidiClock((value) => !value)}
+                  disabled={!selectedMidiOutputId}
+                >
+                  {sendMidiClock ? "Clock on" : "Clock off"}
+                </button>
                 <div className="status-pill">Last MIDI: {lastMidiMessage ?? "--"}</div>
               </div>
+              {sendMidiClock ? (
+                <div className="help-text">Clock sending at 120 BPM (placeholder).</div>
+              ) : null}
               {midiError ? <div style={{ color: "var(--danger)" }}>{midiError}</div> : null}
               <div className="help-text">
                 To send MIDI into Ableton, you still need a virtual/loopback MIDI port (IAC on macOS,
@@ -872,11 +1061,16 @@ const HomePage = () => {
           {participants.map((participant, index) => {
             const isLocal = room?.localParticipant?.identity === participant.identity;
             const stats = participantStats.get(participant.identity ?? "");
+            const level = audioLevels.get(participant.identity ?? "") ?? 0;
             const tileConnectionState = isLocal
-              ? connectionState
-              : (participant as RemoteParticipant).isConnected
-                ? "connected"
-                : "disconnected";
+              ? connectionState === "reconnecting"
+                ? "reconnecting"
+                : "connected"
+              : connectionState === "reconnecting"
+                ? "reconnecting"
+                : (participant as RemoteParticipant).isConnected
+                  ? "connected"
+                  : "disconnected";
             return (
               <ParticipantTile
                 key={participant.identity ?? (participant as any).sid ?? index}
@@ -886,6 +1080,7 @@ const HomePage = () => {
                 stats={stats}
                 deviceInfo={isLocal ? deviceInfo : undefined}
                 midiLabels={isLocal ? localMidiLabels : undefined}
+                audioLevel={level}
                 version={trackVersion}
               />
             );

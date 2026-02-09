@@ -1,6 +1,8 @@
-# RemoteDJ
+# Meshroom
 
 Web-based remote DJ/Ableton collaboration app scaffold.
+
+Early docker based development version, more accessible installer in plans once core features have been completed.
 
 ## Prereqs
 

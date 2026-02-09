@@ -203,7 +203,8 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
     });
     token.addGrant({
       roomJoin: true,
-      room
+      room,
+      canUpdateOwnMetadata: true
     });
 
     reply.send({
