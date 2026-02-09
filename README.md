@@ -1,5 +1,7 @@
 # Meshroom
 
+Bring back the fun of doing stuff together. It may not sound good but having a soul is good start.
+
 Web-based remote DJ/Ableton collaboration app for up to 4 people.
 
 - Uses either Ableton Link (through local proxy) or traditional Midi Sync.
@@ -8,6 +10,7 @@ Web-based remote DJ/Ableton collaboration app for up to 4 people.
 - Overdubbing individually or together
 - WebMIDI support for using your midi controller without external software
 - OBS Studio support for further broadcasting / processing
+- Easy Export results for further processing and mixdown.
 
 Early docker based development version, more accessible installer in plans once core features have been completed.
 
