@@ -2,7 +2,9 @@
 
 Bring back the fun of doing stuff together. It may not sound good but having a soul is good start.
 
-Web-based remote DJ/Ableton collaboration app for up to 4 people.
+Meshroom is a web-based remote DJ/Ableton collaboration app for up to 4 people. At minimum it needs human with midi controller and WebMIDI supported browser. Other DAW's with Midi Sync support are supported as well. 
+
+Purpose of this project is to fill the void for live collaboration and music making. If you are familiar with existing choices such as Ninjam, Jamulus or Jamtaba, this has the same core principle but without the technical workload, custom plugins and other fuzz that kills the buzz. Start session, invite people, open your favourite DAW, link your controllers and rest is up to you. 
 
 - Uses either Ableton Link (through local proxy) or traditional Midi Sync.
 - Session room with latency indicators, channel assignments, voice discussions and audio previews individually and together.
