@@ -1,6 +1,12 @@
 # Meshroom
 
-Web-based remote DJ/Ableton collaboration app scaffold.
+Web-based remote DJ/Ableton collaboration app for up to 4 people.
+
+- Uses either Ableton Link (through local proxy) or traditional Midi Sync.
+- Session room with latency indicators, channel assignments, voice discussions and audio previews individually and together.
+- Basic 4-channel mixer controls for each participants.
+- Overdubbing individually or together
+- WebMIDI support for using your midi controller without external software
 
 Early docker based development version, more accessible installer in plans once core features have been completed.
 
