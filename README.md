@@ -27,9 +27,10 @@ Start session, invite people, open your favourite DAW, link your controllers and
 
 Early docker based development version, more accessible installer in plans once core features have been completed.
 
-*Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)*
+**Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)**
 
-**![screenshots_1]([https://github.com/username/repository/](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)**
+![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
+
 ## Prereqs
 
 - Node.js 18+
