@@ -56,7 +56,7 @@ Use your own grooves or some pre-selected ones to start off the jam if you prefe
 
 ![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)
 
-** Alternatively, you can toggle metronome (will not be recorded)**
+**Alternatively, you can toggle metronome from the session controls (will not be recorded)**
 
 
 # Installation
