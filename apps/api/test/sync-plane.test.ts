@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { buildServer } from "../src/server";
 import { loadConfig } from "../src/config";
+import { createStore } from "../src/store";
 
 const waitForMessage = (socket: WebSocket, predicate: (data: any) => boolean) => {
   return new Promise<any>((resolve, reject) => {
@@ -43,6 +44,7 @@ describe("sync plane", () => {
     });
 
     const server = buildServer(config, {
+      store: createStore({ filePath: "memory", persist: false }),
       roomService: { listParticipants: async () => [] },
       egressClient: {
         startTrackEgress: async () => ({ egressId: "egress" }),

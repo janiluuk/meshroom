@@ -3,17 +3,30 @@ export type ParticipantManifest = {
   name?: string;
 };
 
+export type ReconnectMarker = {
+  at: string;
+  reason?: string;
+};
+
 export type TrackManifest = {
   participantIdentity: string;
   participantName?: string;
   kind: "audio";
   url: string;
+  container: string;
+  codec: string;
+  startedAt: string;
+  endedAt?: string;
+  reconnects: ReconnectMarker[];
   startOffsetMs: number;
 };
+
+export type SyncMode = "LINK_LAN" | "LINK_WAN" | "MIDI";
 
 export type SessionManifest = {
   sessionId: string;
   room: string;
+  syncMode: SyncMode;
   startedAt: string;
   endedAt?: string;
   participants: ParticipantManifest[];
@@ -26,7 +39,11 @@ export type ActiveTrack = {
   participantName?: string;
   kind: "audio";
   url: string;
+  container: string;
+  codec: string;
   startedAt: string;
+  endedAt?: string;
+  reconnects: ReconnectMarker[];
   egressId: string;
   fileKey: string;
 };
@@ -47,6 +64,7 @@ const toOffsetMs = (sessionStart: string, trackStart: string) => {
 export const toManifest = (session: ActiveSession): SessionManifest => ({
   sessionId: session.sessionId,
   room: session.room,
+  syncMode: session.syncMode,
   startedAt: session.startedAt,
   endedAt: session.endedAt,
   participants: session.participants,
@@ -55,6 +73,11 @@ export const toManifest = (session: ActiveSession): SessionManifest => ({
     participantName: track.participantName,
     kind: "audio",
     url: track.url,
+    container: track.container,
+    codec: track.codec,
+    startedAt: track.startedAt,
+    endedAt: track.endedAt,
+    reconnects: track.reconnects ?? [],
     startOffsetMs: toOffsetMs(session.startedAt, track.startedAt)
   })),
   masterMixUrl: session.masterMixUrl

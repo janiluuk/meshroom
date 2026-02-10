@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web \"pnpm --filter @remote-dj/api dev\" \"pnpm --filter @remote-dj/web dev\"",
+    "dev:sync": "pnpm --filter @remote-dj/sync-bridge dev",
     "infra:up": "cd infra && docker compose up -d",
     "infra:down": "cd infra && docker compose down",
     "infra:logs": "cd infra && docker compose logs -f",

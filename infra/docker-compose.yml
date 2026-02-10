@@ -45,6 +45,7 @@ services:
 
   livekit-egress:
     image: livekit/egress:latest
+    command: --config /etc/egress.yaml
     env_file:
       - ./.env
     environment:
@@ -63,6 +64,8 @@ services:
       - livekit
       - redis
       - minio
+    volumes:
+      - ./config/egress.yaml:/etc/egress.yaml:ro
     restart: unless-stopped
 
 volumes:

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildServer } from "../src/server";
 import { loadConfig } from "../src/config";
+import { createStore } from "../src/store";
 
 describe("recording start", () => {
   it("creates egress jobs for track egress", async () => {
@@ -51,6 +52,7 @@ describe("recording start", () => {
     };
 
     const server = buildServer(config, {
+      store: createStore({ filePath: "memory", persist: false }),
       roomService,
       egressClient,
       s3Client,

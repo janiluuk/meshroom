@@ -12,8 +12,9 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { randomUUID } from "crypto";
 import { Readable } from "stream";
 import type { AppConfig } from "./config";
-import type { ActiveSession, ActiveTrack, SessionManifest } from "./manifest";
+import type { ActiveSession, ActiveTrack, SessionManifest, SyncMode } from "./manifest";
 import { toManifest } from "./manifest";
+import { createStore, type Store, type StoredUser } from "./store";
 import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 
@@ -53,6 +54,7 @@ type ServerDeps = {
   egressClient: EgressClientLike;
   s3Client: S3ClientLike;
   now: () => Date;
+  store: Store;
 };
 
 type ProgramOutState = {
@@ -78,6 +80,10 @@ type SyncStateMessage = {
   type: "state";
   tempo: number;
   transport: "stopped" | "playing" | "paused";
+  mode?: "LINK_LAN" | "LINK_WAN" | "MIDI";
+  quantum?: number;
+  beat?: number;
+  phase?: number;
 };
 
 type SyncPingMessage = {
@@ -85,7 +91,10 @@ type SyncPingMessage = {
   sentAt: number;
 };
 
+type SyncMessage = SyncJoinMessage | SyncStateMessage | SyncPingMessage;
+
 const recordingContainer = "mp4";
+const recordingCodec = "aac";
 const recordingFileType = EncodedFileType.MP4;
 
 const buildTrackUrl = (publicUrl: string, bucket: string, fileKey: string) => {
@@ -112,47 +121,54 @@ const safePathPart = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, "_");
 
 const isAudioTrack = (kind: string) => kind === "audio";
 
-const createDefaultDeps = (config: AppConfig): ServerDeps => {
-  const roomService = new RoomServiceClient(
-    config.livekit.apiUrl,
-    config.livekit.apiKey,
-    config.livekit.apiSecret
-  );
-  const egressClient = new EgressClient(
-    config.livekit.apiUrl,
-    config.livekit.apiKey,
-    config.livekit.apiSecret
-  );
-  const s3Client = new S3Client({
-    region: config.minio.region,
-    endpoint: config.minio.endpoint,
-    forcePathStyle: config.minio.forcePathStyle,
-    credentials: {
-      accessKeyId: config.minio.accessKey,
-      secretAccessKey: config.minio.secretKey
-    }
-  });
-
-  return {
-    roomService,
-    egressClient,
-    s3Client,
-    now: () => new Date()
-  };
-};
-
-export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
+export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) => {
   const server = Fastify({
     logger: true
   });
 
-  const { roomService, egressClient, s3Client, now } = {
-    ...createDefaultDeps(config),
-    ...deps
-  };
+  const now = deps.now ?? (() => new Date());
+  const roomService =
+    deps.roomService ??
+    new RoomServiceClient(config.livekit.apiUrl, config.livekit.apiKey, config.livekit.apiSecret);
+  const egressClient =
+    deps.egressClient ??
+    new EgressClient(config.livekit.apiUrl, config.livekit.apiKey, config.livekit.apiSecret);
+  const s3Client =
+    deps.s3Client ??
+    new S3Client({
+      region: config.minio.region,
+      endpoint: config.minio.endpoint,
+      forcePathStyle: config.minio.forcePathStyle,
+      credentials: {
+        accessKeyId: config.minio.accessKey,
+        secretAccessKey: config.minio.secretKey
+      }
+    });
+  const store = deps.store ?? createStore({ filePath: config.storePath, now });
 
   const activeSessions = new Map<string, ActiveSession>();
   let activeProgramOut: ProgramOutState | null = null;
+
+  const getAuthUser = (request: FastifyRequest): StoredUser | null => {
+    const header = request.headers.authorization;
+    if (!header || Array.isArray(header)) {
+      return null;
+    }
+    const [scheme, token] = header.split(" ");
+    if (scheme?.toLowerCase() !== "bearer" || !token) {
+      return null;
+    }
+    return store.getUserByToken(token);
+  };
+
+  const requireAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = getAuthUser(request);
+    if (!user) {
+      return reply.code(401).send({ error: "Unauthorized" });
+    }
+    (request as FastifyRequest & { user?: StoredUser }).user = user;
+    return undefined;
+  };
 
   const requireMasterAuth = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!config.masterKey) {
@@ -184,15 +200,100 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
     status: "ready"
   }));
 
-  server.post("/auth/token", async (request, reply) => {
-    const body = request.body as { room?: string; identity?: string; name?: string; role?: string };
-    const room = body?.room?.trim();
-    const identity = body?.identity?.trim();
+  server.get("/ping", async () => ({
+    status: "ok",
+    now: Date.now()
+  }));
+
+  server.post("/auth/login", async (request, reply) => {
+    const body = request.body as { displayName?: string };
+    const displayName = body?.displayName?.trim();
+    if (!displayName) {
+      reply.code(400).send({ error: "displayName is required" });
+      return;
+    }
+
+    const { user, token } = store.login(displayName);
+    reply.send({ user, token });
+  });
+
+  server.get("/me", { preHandler: requireAuth }, async (request) => {
+    const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+    return { user };
+  });
+
+  server.get("/sessions", { preHandler: requireAuth }, async (request) => {
+    const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+    return { sessions: store.listSessionsForUser(user.id) };
+  });
+
+  server.post("/sessions", { preHandler: requireAuth }, async (request, reply) => {
+    const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+    const body = request.body as { name?: string };
     const name = body?.name?.trim();
+    if (!name) {
+      reply.code(400).send({ error: "name is required" });
+      return;
+    }
+    const session = store.createSession(user.id, name);
+    reply.send({ session });
+  });
+
+  server.post("/sessions/:id/join", { preHandler: requireAuth }, async (request, reply) => {
+    const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+    const body = request.body as { role?: "master" | "peer" };
+    const role = body?.role;
+    if (role !== "master" && role !== "peer") {
+      reply.code(400).send({ error: "role must be master or peer" });
+      return;
+    }
+    const sessionId = (request.params as { id?: string }).id;
+    if (!sessionId) {
+      reply.code(400).send({ error: "session id is required" });
+      return;
+    }
+    const session = store.joinSession(user.id, sessionId, role);
+    if (!session) {
+      reply.code(404).send({ error: "Session not found" });
+      return;
+    }
+    if (!config.livekit.apiKey || !config.livekit.apiSecret) {
+      reply.code(500).send({ error: "LiveKit credentials not configured" });
+      return;
+    }
+
+    const token = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
+      identity: user.id,
+      name: user.displayName
+    });
+    token.addGrant({
+      roomJoin: true,
+      room: session.roomName,
+      canUpdateOwnMetadata: true
+    });
+
+    reply.send({
+      token: token.toJwt(),
+      room: session.roomName,
+      identity: user.id,
+      role,
+      livekitUrl: config.livekit.url,
+      session
+    });
+  });
+
+  server.post("/auth/token", async (request, reply) => {
+    const user = getAuthUser(request);
+    if (!user) {
+      reply.code(401).send({ error: "Unauthorized" });
+      return;
+    }
+    const body = request.body as { room?: string; role?: string };
+    const room = body?.room?.trim();
     const role = body?.role?.trim();
 
-    if (!room || !identity || !role) {
-      reply.code(400).send({ error: "room, identity, and role are required" });
+    if (!room || !role) {
+      reply.code(400).send({ error: "room and role are required" });
       return;
     }
 
@@ -206,11 +307,11 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
       return;
     }
 
-    server.log.info({ event: "auth_token", room, identity, role }, "Minting LiveKit token");
+    server.log.info({ event: "auth_token", room, identity: user.id, role }, "Minting LiveKit token");
 
     const token = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
-      identity,
-      name
+      identity: user.id,
+      name: user.displayName
     });
     token.addGrant({
       roomJoin: true,
@@ -221,7 +322,7 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
     reply.send({
       token: token.toJwt(),
       room,
-      identity,
+      identity: user.id,
       role,
       livekitUrl: config.livekit.url
     });
@@ -231,11 +332,17 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
     "/recording/start",
     { preHandler: requireMasterAuth },
     async (request, reply) => {
-      const body = request.body as { room?: string };
+      const body = request.body as { room?: string; syncMode?: SyncMode };
       const room = body?.room?.trim();
+      const syncMode = body?.syncMode ?? "LINK_LAN";
 
       if (!room) {
         reply.code(400).send({ error: "room is required" });
+        return;
+      }
+
+      if (!["LINK_LAN", "LINK_WAN", "MIDI"].includes(syncMode)) {
+        reply.code(400).send({ error: "syncMode must be LINK_LAN, LINK_WAN, or MIDI" });
         return;
       }
 
@@ -304,12 +411,15 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
           }
 
           const trackStartedAt = now().toISOString();
-        trackManifests.push({
-          participantIdentity: identity,
-          participantName: participant.name ?? undefined,
+          trackManifests.push({
+            participantIdentity: identity,
+            participantName: participant.name ?? undefined,
             kind: "audio",
             url: buildTrackUrl(config.minio.publicUrl, config.minio.bucket, fileKey),
+            container: recordingContainer,
+            codec: recordingCodec,
             startedAt: trackStartedAt,
+            reconnects: [],
             egressId: egressInfo.egressId,
             fileKey
           });
@@ -326,6 +436,7 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
       const manifest: ActiveSession = {
         sessionId,
         room,
+        syncMode,
         startedAt,
         participants: participantManifests,
         tracks: trackManifests
@@ -349,15 +460,15 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
         return;
       }
 
-    const manifest = activeSessions.get(sessionId);
-    if (!manifest) {
-      reply.code(404).send({ error: "session not found" });
-      return;
-    }
+      const manifest = activeSessions.get(sessionId);
+      if (!manifest) {
+        reply.code(404).send({ error: "session not found" });
+        return;
+      }
 
-    server.log.info({ event: "recording_stop", sessionId }, "Stopping recording session");
+      server.log.info({ event: "recording_stop", sessionId }, "Stopping recording session");
 
-    const endedAt = now().toISOString();
+      const endedAt = now().toISOString();
 
       for (const track of manifest.tracks) {
         try {
@@ -365,6 +476,7 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
         } catch (error) {
           server.log.error({ error, egressId: track.egressId }, "Failed to stop egress");
         }
+        track.endedAt = endedAt;
       }
 
       manifest.endedAt = endedAt;
@@ -400,9 +512,9 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
       }
 
       if (!config.programOutUrl) {
-      reply.code(500).send({ error: "PROGRAM_OUT_RTMP_URL not configured" });
-      return;
-    }
+        reply.code(500).send({ error: "PROGRAM_OUT_RTMP_URL not configured" });
+        return;
+      }
 
       if (!config.livekit.apiKey || !config.livekit.apiSecret) {
         reply.code(500).send({ error: "LiveKit credentials not configured" });
@@ -410,11 +522,11 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
       }
 
       if (activeProgramOut) {
-      reply
-        .code(409)
-        .send({ error: "Program Out already running", egressId: activeProgramOut.egressId });
-      return;
-    }
+        reply
+          .code(409)
+          .send({ error: "Program Out already running", egressId: activeProgramOut.egressId });
+        return;
+      }
 
       const output = new StreamOutput({
         urls: [config.programOutUrl]
@@ -553,7 +665,7 @@ const setupSyncPlane = (httpServer: import("http").Server, config: AppConfig) =>
     }
   };
 
-  const parseMessage = (data: RawData) => {
+  const parseMessage = (data: RawData): SyncMessage | null => {
     try {
       const text = typeof data === "string" ? data : data.toString();
       return JSON.parse(text) as SyncJoinMessage | SyncStateMessage;
@@ -616,11 +728,31 @@ const setupSyncPlane = (httpServer: import("http").Server, config: AppConfig) =>
           sendJson(socket, { type: "error", error: "invalid transport" });
           return;
         }
+        if (state.mode && !["LINK_LAN", "LINK_WAN", "MIDI"].includes(state.mode)) {
+          sendJson(socket, { type: "error", error: "invalid mode" });
+          return;
+        }
+        if (state.quantum !== undefined && (!Number.isFinite(state.quantum) || state.quantum <= 0)) {
+          sendJson(socket, { type: "error", error: "invalid quantum" });
+          return;
+        }
+        if (state.beat !== undefined && !Number.isFinite(state.beat)) {
+          sendJson(socket, { type: "error", error: "invalid beat" });
+          return;
+        }
+        if (state.phase !== undefined && !Number.isFinite(state.phase)) {
+          sendJson(socket, { type: "error", error: "invalid phase" });
+          return;
+        }
 
         broadcast(client.room, {
           type: "state",
           tempo: state.tempo,
           transport: state.transport,
+          mode: state.mode,
+          quantum: state.quantum,
+          beat: state.beat,
+          phase: state.phase,
           at: Date.now()
         });
         return;

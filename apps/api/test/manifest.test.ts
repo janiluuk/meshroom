@@ -7,6 +7,7 @@ describe("manifest creation", () => {
     const session: ActiveSession = {
       sessionId: "session-123",
       room: "room-a",
+      syncMode: "LINK_LAN",
       startedAt: "2024-01-01T00:00:00.000Z",
       endedAt: "2024-01-01T00:05:00.000Z",
       participants: [
@@ -21,7 +22,11 @@ describe("manifest creation", () => {
           participantName: "Alice",
           kind: "audio",
           url: "http://minio/sessions/session-123/alice/audio.mp4",
+          container: "mp4",
+          codec: "aac",
           startedAt: "2024-01-01T00:00:01.000Z",
+          endedAt: "2024-01-01T00:05:00.000Z",
+          reconnects: [],
           egressId: "egress-1",
           fileKey: "sessions/session-123/alice/audio.mp4"
         }
@@ -33,6 +38,7 @@ describe("manifest creation", () => {
     expect(manifest).toEqual({
       sessionId: "session-123",
       room: "room-a",
+      syncMode: "LINK_LAN",
       startedAt: "2024-01-01T00:00:00.000Z",
       endedAt: "2024-01-01T00:05:00.000Z",
       participants: [
@@ -47,6 +53,11 @@ describe("manifest creation", () => {
           participantName: "Alice",
           kind: "audio",
           url: "http://minio/sessions/session-123/alice/audio.mp4",
+          container: "mp4",
+          codec: "aac",
+          startedAt: "2024-01-01T00:00:01.000Z",
+          endedAt: "2024-01-01T00:05:00.000Z",
+          reconnects: [],
           startOffsetMs: 1000
         }
       ],

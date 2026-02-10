@@ -7,6 +7,11 @@ type TrackManifest = {
   participantName?: string;
   kind: "audio";
   url: string;
+  container?: string;
+  codec?: string;
+  startedAt?: string;
+  endedAt?: string;
+  reconnects?: Array<{ at: string; reason?: string }>;
   startOffsetMs?: number;
 };
 
@@ -18,6 +23,7 @@ type ParticipantManifest = {
 type SessionManifest = {
   sessionId: string;
   room: string;
+  syncMode?: "LINK_LAN" | "LINK_WAN" | "MIDI";
   startedAt: string;
   endedAt?: string;
   participants: ParticipantManifest[];

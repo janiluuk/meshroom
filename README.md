@@ -49,6 +49,7 @@ pnpm install
 cp infra/.env.example infra/.env
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
+cp apps/sync-bridge/.env.example apps/sync-bridge/.env
 ```
 
 3) Start infra (from `/infra`)
@@ -67,7 +68,13 @@ Or use `pnpm infra:up` from the repo root.
 pnpm dev
 ```
 
-5) Open the web app and join twice (master + peer)
+5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
+
+```bash
+pnpm dev:sync
+```
+
+6) Open the web app, sign in, create a session, then join twice (master + peer)
 
 - Web: http://localhost:3000
 - API: http://localhost:4000
@@ -76,36 +83,46 @@ pnpm dev
 - LiveKit: ws://localhost:7880
 - MinIO: http://localhost:9000 (console http://localhost:9001)
 
-6) Start recording, stop, open playback
+7) Start recording, stop, open playback
 
 - Use the master controls to start and stop a recording
 - Click the playback link to open the aligned session view
 
-7) Start Program Out and ingest in OBS
+8) Start Program Out and ingest in OBS
 
 - Start Program Out in the master UI
 - In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
 
 ## API endpoints
 
-- `POST /auth/token` -> `{ room, identity, name?, role }`
+- `POST /auth/login` -> `{ displayName }`
+- `GET /me` -> current user
+- `GET /sessions` -> list sessions for current user
+- `POST /sessions` -> create session
+- `POST /sessions/:id/join` -> join session + mint LiveKit token
+- `POST /auth/token` -> `{ room, role }` (auth required)
 - `GET /rooms/:room` -> room info (404 if not found)
-- `POST /recording/start` (privileged) -> `{ room }` returns `{ sessionId }`
+- `POST /recording/start` (privileged) -> `{ room, syncMode }` returns `{ sessionId }`
 - `POST /recording/stop` (privileged) -> `{ sessionId }`
 - `POST /program/start` (privileged) -> `{ roomName }`
 - `POST /program/stop` (privileged)
 - `GET /sessions/:id` -> session manifest
 
-Set `MASTER_KEY` in `apps/api/.env`. Use header `x-master-key: <secret>` for privileged endpoints.
+Set `MASTER_KEY` in `apps/api/.env`. Use header `x-master-key: <secret>` for privileged endpoints. Use `Authorization: Bearer <token>` for auth-protected endpoints.
 
 ### Curl examples
 
 Token minting:
 
 ```bash
+AUTH_TOKEN=$(curl -s http://localhost:4000/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d '{\"displayName\":\"DJ 1\"}' | node -e "process.stdin.on('data', d => { console.log(JSON.parse(d.toString()).token); })")
+
 curl -s http://localhost:4000/auth/token \\
   -H "Content-Type: application/json" \\
-  -d '{\"room\":\"studio-1\",\"identity\":\"dj-1\",\"name\":\"DJ 1\",\"role\":\"master\"}'
+  -H "Authorization: Bearer $AUTH_TOKEN" \\
+  -d '{\"room\":\"studio-1\",\"role\":\"master\"}'
 ```
 
 Room lookup:
@@ -154,6 +171,7 @@ Manifest shape:
 {
   "room": "studio-1",
   "sessionId": "session-uuid",
+  "syncMode": "LINK_LAN",
   "startedAt": "2024-01-01T00:00:00.000Z",
   "endedAt": "2024-01-01T00:10:00.000Z",
   "participants": [
@@ -165,6 +183,11 @@ Manifest shape:
       "participantName": "DJ 1",
       "kind": "audio",
       "url": "http://localhost:9000/recordings/sessions/<id>/dj-1/audio.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.500Z",
+      "endedAt": "2024-01-01T00:10:00.000Z",
+      "reconnects": [],
       "startOffsetMs": 0
     }
   ]
@@ -192,8 +215,21 @@ pnpm smoke
 
 This starts infra and checks container health, API health endpoints, LiveKit reachability, and MinIO bucket presence.
 
+## Sync Bridge (Ableton Link)
+
+`apps/sync-bridge` exposes a local WebSocket API that joins Ableton Link on the host and bridges LINK_WAN via `apps/api`.
+
+```bash
+cp apps/sync-bridge/.env.example apps/sync-bridge/.env
+pnpm dev:sync
+```
+
+Set `NEXT_PUBLIC_LINK_PROXY_URL` in `apps/web/.env` if you want a custom host/port. LINK_WAN uses `API_SYNC_URL` and `MASTER_KEY` from `apps/sync-bridge/.env`.
+If the Ableton Link native module is not available, the sync bridge falls back to a local clock and logs a warning.
+
 ## Notes
 
 - LiveKit config is in `infra/config/livekit.yaml`.
+- LiveKit Egress config is in `infra/config/egress.yaml` and should match `infra/.env`.
 - LiveKit Egress is wired to MinIO for recordings. Adjust S3 settings in `infra/.env`.
 - Program Out (RTMP/SRT) output uses `PROGRAM_OUT_RTMP_URL` from `apps/api/.env`.

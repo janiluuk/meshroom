@@ -20,6 +20,7 @@ export type AppConfig = {
   };
   programOutUrl: string;
   masterKey: string;
+  storePath: string;
 };
 
 const parseBoolean = (value: string | undefined, defaultValue: boolean) => {
@@ -71,6 +72,7 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): AppConfig => {
       publicUrl: env.MINIO_PUBLIC_URL ?? minioEndpoint
     },
     programOutUrl: env.PROGRAM_OUT_RTMP_URL ?? "",
-    masterKey: env.MASTER_KEY ?? env.MASTER_API_KEY ?? ""
+    masterKey: env.MASTER_KEY ?? env.MASTER_API_KEY ?? "",
+    storePath: env.STORE_PATH ?? ".data/remote-dj.json"
   };
 };

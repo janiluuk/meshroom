@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildServer } from "../src/server";
 import { loadConfig } from "../src/config";
+import { createStore } from "../src/store";
 
 const decodeBase64Url = (value: string) => {
   const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), "=");
@@ -26,6 +27,7 @@ describe("/auth/token", () => {
     });
 
     const server = buildServer(config, {
+      store: createStore({ filePath: "memory", persist: false, now: () => new Date("2024-01-01T00:00:00.000Z") }),
       roomService: { listParticipants: async () => [] },
       egressClient: {
         startTrackEgress: async () => ({ egressId: "egress" }),
@@ -36,13 +38,24 @@ describe("/auth/token", () => {
       now: () => new Date("2024-01-01T00:00:00.000Z")
     });
 
+    const loginResponse = await server.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: {
+        displayName: "Alice"
+      }
+    });
+
+    const { token: authToken, user } = loginResponse.json();
+
     const response = await server.inject({
       method: "POST",
       url: "/auth/token",
+      headers: {
+        authorization: `Bearer ${authToken}`
+      },
       payload: {
         room: "room-a",
-        identity: "alice",
-        name: "Alice",
         role: "master"
       }
     });
@@ -50,13 +63,13 @@ describe("/auth/token", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.room).toBe("room-a");
-    expect(body.identity).toBe("alice");
+    expect(body.identity).toBe(user.id);
     expect(body.role).toBe("master");
     expect(typeof body.token).toBe("string");
 
     const [, payload] = body.token.split(".");
     const decoded = JSON.parse(decodeBase64Url(payload));
-    expect(decoded.sub).toBe("alice");
+    expect(decoded.sub).toBe(user.id);
     expect(decoded.name).toBe("Alice");
     expect(decoded.grants.room).toBe("room-a");
     expect(decoded.grants.roomJoin).toBe(true);
