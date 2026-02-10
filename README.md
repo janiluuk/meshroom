@@ -77,7 +77,7 @@ pnpm dev
 ```bash
 pnpm dev:sync
 ```
-![screenshots_2](https://github.com/janiluuk/meshroom/blob/main/screenshots_2.png)]
+![session_create(https://github.com/janiluuk/meshroom/blob/main/session_create.png)]
 
 6) Open the web app, sign in, create a session, then join twice (master + peer)
 
