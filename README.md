@@ -111,14 +111,13 @@ pnpm dev
 
 Or use `pnpm infra:up` from the repo root.
 
-
-5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
+4) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
 
 ```bash
 pnpm dev:sync
 ```
 
-6) Open the web app, sign in, create a session, then join twice (master + peer)
+5) Open the web app, sign in, create a session, then join twice (master + peer)
 
 - Web: http://localhost:3000
 - API: http://localhost:4000
@@ -127,16 +126,17 @@ pnpm dev:sync
 - LiveKit: ws://localhost:7880
 - MinIO: http://localhost:9000 (console http://localhost:9001)
 
-7) Start recording, stop, open playback
+6) Start recording, stop, open playback
 
 - Use the master controls to start and stop a recording
 - Click the playback link to open the aligned session view
 
-8) Start Program Out and ingest in OBS
+7) Start Program Out and ingest in OBS
 
 - Start Program Out in the master UI
 - In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
 
+8) once all tracks are in, export the results (master + individual channels)
 
 ## API endpoints
 
