@@ -29,6 +29,8 @@ Early docker based development version, more accessible installer in plans once 
 
 **Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)**
 
+## Main screens. (Mellowyellow theme)
+
 ![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
 
 
@@ -37,11 +39,14 @@ Early docker based development version, more accessible installer in plans once 
 
 You can save parameter set as a snapshot to use later on, or just restore after getting lost in the sonic oblibion.
 
+### Midi mapping (Purplederp theme)
+
 ![midi mapping](https://github.com/janiluuk/meshroom/blob/main/midi_mapping.png)]
 
-## Taking the edge off from initial silence
 
+## Groove Library (Purplederp theme)
 Use your own grooves or some pre-selected ones to start off the jam if you prefer;
+
 ![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)]
 
 ** Alternatively, you can toggle metronome (will not be recorded)**
