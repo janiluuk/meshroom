@@ -40,10 +40,11 @@ Note that Ableton Link works on local network, so you'll need to use the include
 If in doubt, use Midi Clock Sync. 
 Then select initial BPM and quantization values. Quantization can be disabled if you dont want to sound boringly accurate. 
 
-**Recommended values for session with slow connection participant: 1/2 -> 1 bar, otherwise 1/8 - 1/16** 
+**Recommended values for session with slow connection participant: 1/2 -> 1 bar, otherwise 1/8 - 1/16**
 
 ![session](https://github.com/janiluuk/meshroom/blob/main/session_create.png)
 
+You can copy the session link for sharing by clicking "Copy session link" button on top. 
 
 ## Mapping your midi controller
 
