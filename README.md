@@ -31,7 +31,7 @@ Early docker based development version, more accessible installer in plans once 
 
 ## Main screens. (Mellowyellow theme)
 
-![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
+![screenshots_1(https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
 
 
 
