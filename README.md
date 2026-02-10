@@ -35,6 +35,10 @@ Early docker based development version, more accessible installer in plans once 
 
 ### Session creation (Mellowyellow theme)
 
+Note that Ableton Link works on local network, so you'll need to use the included utility to get it enabled. It is super accurate, but limits the DAW to Ableton and is not officially supported method.
+
+If in doubt, use Midi Clock Sync
+
 ![session](https://github.com/janiluuk/meshroom/blob/main/session_create.png)
 
 
