@@ -32,42 +32,25 @@ Early docker based development version, more accessible installer in plans once 
 ![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
 
 
-4) Map midi controls or use your presets;
+
+## Mapping your midi controller after connecting is easy. 
+
+You can save parameter set as a snapshot to use later on, or just restore after getting lost in the sonic oblibion.
 
 ![midi mapping](https://github.com/janiluuk/meshroom/blob/main/midi_mapping.png)]
 
-5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
+## Taking the edge off from initial silence
 
-```bash
-pnpm dev:sync
-```
-![session_create(https://github.com/janiluuk/meshroom/blob/main/session_create.png)]
-
-6) Open the web app, sign in, create a session, then join twice (master + peer)
-
-- Web: http://localhost:3000
-- API: http://localhost:4000
-- API health: http://localhost:4000/health
-- API ready: http://localhost:4000/ready
-- LiveKit: ws://localhost:7880
-- MinIO: http://localhost:9000 (console http://localhost:9001)
-
-7) Start recording, stop, open playback
-
-- Use the master controls to start and stop a recording
-- Click the playback link to open the aligned session view
-
-8) Start Program Out and ingest in OBS
-
-- Start Program Out in the master UI
-- In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
-
-9) Use your own grooves or some pre-selected ones to start off the jam if you prefer;
+Use your own grooves or some pre-selected ones to start off the jam if you prefer;
 ![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)]
 
+** Alternatively, you can toggle metronome (will not be recorded)**
 
 
 # Installation
+
+For time being the installation requires some commandline work and has been tested only in Linux. 
+Once the testing concludes, proper installer for all platforms will be provided.
 
 ## Prereqs
 
@@ -94,7 +77,6 @@ cp apps/sync-bridge/.env.example apps/sync-bridge/.env
 
 3) Start both services 
 
-
 infra (from `/infra`):
 ```bash
 cd infra
@@ -108,6 +90,35 @@ pnpm dev
 ```
 
 Or use `pnpm infra:up` from the repo root.
+
+
+5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
+
+```bash
+pnpm dev:sync
+```
+
+6) Open the web app, sign in, create a session, then join twice (master + peer)
+
+- Web: http://localhost:3000
+- API: http://localhost:4000
+- API health: http://localhost:4000/health
+- API ready: http://localhost:4000/ready
+- LiveKit: ws://localhost:7880
+- MinIO: http://localhost:9000 (console http://localhost:9001)
+
+![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/session_create.png)]
+
+7) Start recording, stop, open playback
+
+- Use the master controls to start and stop a recording
+- Click the playback link to open the aligned session view
+
+8) Start Program Out and ingest in OBS
+
+- Start Program Out in the master UI
+- In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
+
 
 ## API endpoints
 
