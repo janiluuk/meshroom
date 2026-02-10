@@ -33,6 +33,10 @@ Early docker based development version, more accessible installer in plans once 
 
 ![main_screens](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)
 
+### Session creation 
+
+![session](https://github.com/janiluuk/meshroom/blob/main/session_create.png)
+
 
 ### Mapping your midi controller after connecting is easy. 
 
@@ -110,8 +114,6 @@ pnpm dev:sync
 - API ready: http://localhost:4000/ready
 - LiveKit: ws://localhost:7880
 - MinIO: http://localhost:9000 (console http://localhost:9001)
-
-![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/session_create.png)]
 
 7) Start recording, stop, open playback
 
