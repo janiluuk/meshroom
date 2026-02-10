@@ -55,21 +55,29 @@ cp apps/web/.env.example apps/web/.env
 cp apps/sync-bridge/.env.example apps/sync-bridge/.env
 ```
 
-3) Start infra (from `/infra`)
+3) Start both services 
 
+
+infra (from `/infra`):
 ```bash
 cd infra
 docker compose up -d
 cd ..
 ```
-
-Or use `pnpm infra:up` from the repo root.
-
-4) Start apps
+apps:
 
 ```bash
 pnpm dev
 ```
+
+Or use `pnpm infra:up` from the repo root.
+
+4)
+
+
+4) Map midi controls or use your presets;
+
+![midi mapping](https://github.com/janiluuk/meshroom/blob/main/midi_mapping.png)]
 
 5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
 
