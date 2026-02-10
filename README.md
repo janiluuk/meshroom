@@ -1,4 +1,4 @@
-# Meshroom
+<img width="538" height="760" alt="image" src="https://github.com/user-attachments/assets/a4941428-a5fc-44a5-812f-8c70805557d4" /><img width="538" height="760" alt="image" src="https://github.com/user-attachments/assets/2aadab9f-5faf-4c2f-af09-e5eb8ef711c9" /># Meshroom
 
 Bring back the fun of doing stuff together. It may not sound good always but having a soul is an essence that cannot be learned by any entity or other person.  
 
@@ -30,6 +30,7 @@ Early docker based development version, more accessible installer in plans once 
 **Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)**
 
 ![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
+<img width="538" height="760" alt="image" src="https://github.com/user-attachments/assets/91df8202-98ce-4a4a-bc6c-914ab3718dc0" />
 
 ## Prereqs
 
