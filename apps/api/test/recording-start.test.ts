@@ -64,15 +64,13 @@ describe("recording start", () => {
         "x-master-key": "master-key"
       },
       payload: {
-        roomName: "room-a"
+        room: "room-a"
       }
     });
 
     expect(response.statusCode).toBe(200);
     const payload = response.json();
     expect(payload.sessionId).toBeDefined();
-    expect(payload.roomName).toBe("room-a");
-    expect(payload.participants.length).toBe(2);
-    expect(startedTracks.sort()).toEqual(["audio-1", "audio-2", "video-1"].sort());
+    expect(startedTracks.sort()).toEqual(["audio-1", "audio-2"].sort());
   });
 });

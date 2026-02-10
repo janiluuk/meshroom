@@ -93,6 +93,7 @@ main {
   border-color: rgba(180, 35, 24, 0.4);
   background: rgba(180, 35, 24, 0.08);
   color: var(--danger);
+  font-weight: 600;
 }
 
 .help-text {
@@ -321,6 +322,12 @@ button:not(:disabled):hover {
   gap: 1rem;
 }
 
+.tile-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .tile-name {
   font-weight: 600;
   font-size: 1rem;
@@ -337,6 +344,49 @@ button:not(:disabled):hover {
   background: var(--accent);
   color: #fff;
   padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.quality-badge {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid transparent;
+}
+
+.quality-badge.good {
+  background: rgba(15, 122, 90, 0.12);
+  color: var(--accent);
+  border-color: rgba(15, 122, 90, 0.3);
+}
+
+.quality-badge.fair {
+  background: rgba(240, 93, 35, 0.12);
+  color: var(--accent-2);
+  border-color: rgba(240, 93, 35, 0.3);
+}
+
+.quality-badge.poor {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
+  border-color: rgba(180, 35, 24, 0.3);
+}
+
+.quality-badge.unknown {
+  background: #f6f1e9;
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.rec-pill {
+  background: #b42318;
+  color: #fff;
+  padding: 0.25rem 0.5rem;
   border-radius: 999px;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -398,6 +448,32 @@ button:not(:disabled):hover {
   display: grid;
   gap: 0.8rem;
   max-width: 720px;
+}
+
+.rec-timer {
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.program-url {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.program-url span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.program-url code {
+  background: #f6f1e9;
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.6rem;
+  display: inline-block;
 }
 
 .recording-row {

@@ -12,16 +12,14 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { randomUUID } from "crypto";
 import { Readable } from "stream";
 import type { AppConfig } from "./config";
-import type {
-  ActiveParticipant,
-  ActiveSession,
-  ActiveTrack,
-  SessionManifest
-} from "./manifest";
+import type { ActiveSession, ActiveTrack, SessionManifest } from "./manifest";
 import { toManifest } from "./manifest";
+import { WebSocketServer, WebSocket } from "ws";
+import type { RawData } from "ws";
 
 type ParticipantInfoLike = {
   identity?: string;
+  name?: string;
   tracks?: Array<{
     sid?: string;
     type?: string;
@@ -63,8 +61,31 @@ type ProgramOutState = {
   startedAt: string;
 };
 
+type SyncClient = {
+  room?: string;
+  role?: "master" | "peer";
+  isMaster: boolean;
+};
+
+type SyncJoinMessage = {
+  type: "join";
+  room: string;
+  role: "master" | "peer";
+  masterKey?: string;
+};
+
+type SyncStateMessage = {
+  type: "state";
+  tempo: number;
+  transport: "stopped" | "playing" | "paused";
+};
+
+type SyncPingMessage = {
+  type: "ping";
+  sentAt: number;
+};
+
 const recordingContainer = "mp4";
-const recordingCodec = "h264+aac";
 const recordingFileType = EncodedFileType.MP4;
 
 const buildTrackUrl = (publicUrl: string, bucket: string, fileKey: string) => {
@@ -87,19 +108,9 @@ const normalizeTrackKind = (type?: string) => {
   return type.toLowerCase();
 };
 
-const isRecordableTrack = (kind: string) => kind === "audio" || kind === "video";
-
 const safePathPart = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-const codecForKind = (kind: string) => {
-  if (kind === "audio") {
-    return "aac";
-  }
-  if (kind === "video") {
-    return "h264";
-  }
-  return recordingCodec;
-};
+const isAudioTrack = (kind: string) => kind === "audio";
 
 const createDefaultDeps = (config: AppConfig): ServerDeps => {
   const roomService = new RoomServiceClient(
@@ -220,11 +231,11 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
     "/recording/start",
     { preHandler: requireMasterAuth },
     async (request, reply) => {
-      const body = request.body as { roomName?: string };
-      const roomName = body?.roomName?.trim();
+      const body = request.body as { room?: string };
+      const room = body?.room?.trim();
 
-      if (!roomName) {
-        reply.code(400).send({ error: "roomName is required" });
+      if (!room) {
+        reply.code(400).send({ error: "room is required" });
         return;
       }
 
@@ -238,83 +249,91 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
         return;
       }
 
-      server.log.info({ event: "recording_start", roomName }, "Starting recording session");
+      server.log.info({ event: "recording_start", room }, "Starting recording session");
 
       const startedAt = now().toISOString();
       const sessionId = randomUUID();
 
-      const participants = await roomService.listParticipants(roomName);
+      const participants = await roomService.listParticipants(room);
+      if (!participants.length) {
+        reply.code(400).send({ error: "no participants in room" });
+        return;
+      }
 
-      const participantManifests: ActiveParticipant[] = [];
+      const participantManifests = participants.map((participant) => ({
+        identity: participant.identity ?? "unknown",
+        name: participant.name ?? undefined
+      }));
+
+      const trackManifests: ActiveTrack[] = [];
 
       for (const participant of participants) {
         const identity = participant.identity ?? "unknown";
         const safeIdentity = safePathPart(identity);
         const trackInfos = participant.tracks ?? [];
-        const trackManifests: ActiveTrack[] = [];
+        const audioTrack = trackInfos.find((track) => isAudioTrack(normalizeTrackKind(track.type)));
+        const trackId = audioTrack?.sid?.trim();
 
-        for (const track of trackInfos) {
-          const trackId = track.sid?.trim();
-          if (!trackId) {
-            continue;
-          }
+        if (!trackId) {
+          server.log.warn({ event: "recording_skip", identity }, "No audio track to record");
+          continue;
+        }
 
-          const kind = normalizeTrackKind(track.type);
-          if (!isRecordableTrack(kind)) {
-            continue;
-          }
+        const fileKey = `sessions/${sessionId}/${safeIdentity}/audio.${recordingContainer}`;
+        const output = new EncodedFileOutput({
+          fileType: recordingFileType,
+          filepath: fileKey,
+          s3: new S3Upload({
+            accessKey: config.minio.accessKey,
+            secret: config.minio.secretKey,
+            region: config.minio.region,
+            bucket: config.minio.bucket,
+            endpoint: config.minio.endpoint,
+            forcePathStyle: config.minio.forcePathStyle
+          })
+        });
 
-          const safeTrackId = safePathPart(trackId);
-          const fileKey = `sessions/${sessionId}/${safeIdentity}/${safeTrackId}.${recordingContainer}`;
-          const output = new EncodedFileOutput({
-            fileType: recordingFileType,
-            filepath: fileKey,
-            s3: new S3Upload({
-              accessKey: config.minio.accessKey,
-              secret: config.minio.secretKey,
-              region: config.minio.region,
-              bucket: config.minio.bucket,
-              endpoint: config.minio.endpoint,
-              forcePathStyle: config.minio.forcePathStyle
-            })
-          });
-
-          const egressInfo = await egressClient.startTrackEgress(roomName, trackId, output);
+        try {
+          // Track egress captures a single LiveKit audio track so each participant becomes its own stem.
+          // A room composite egress could be added here later for a master mix if needed.
+          const egressInfo = await egressClient.startTrackEgress(room, trackId, output);
 
           if (!egressInfo.egressId) {
-            throw new Error("Egress did not return an egressId");
+            server.log.error({ event: "recording_egress_error", identity }, "Missing egressId");
+            continue;
           }
 
           const trackStartedAt = now().toISOString();
-          trackManifests.push({
-            trackId,
-            kind,
+        trackManifests.push({
+          participantIdentity: identity,
+          participantName: participant.name ?? undefined,
+            kind: "audio",
             url: buildTrackUrl(config.minio.publicUrl, config.minio.bucket, fileKey),
-            container: recordingContainer,
-            codec: codecForKind(kind),
             startedAt: trackStartedAt,
-            reconnectMarkers: [],
             egressId: egressInfo.egressId,
             fileKey
           });
+        } catch (error) {
+          server.log.error({ error, identity }, "Failed to start track egress");
         }
+      }
 
-        participantManifests.push({
-          identity,
-          tracks: trackManifests
-        });
+      if (!trackManifests.length) {
+        reply.code(400).send({ error: "no audio tracks available to record" });
+        return;
       }
 
       const manifest: ActiveSession = {
         sessionId,
-        roomName,
+        room,
         startedAt,
-        participants: participantManifests
+        participants: participantManifests,
+        tracks: trackManifests
       };
 
       activeSessions.set(sessionId, manifest);
 
-      reply.send(toManifest(manifest));
+      reply.send({ sessionId });
     }
   );
 
@@ -340,14 +359,11 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
 
     const endedAt = now().toISOString();
 
-      for (const participant of manifest.participants) {
-        for (const track of participant.tracks) {
-          try {
-            await egressClient.stopEgress(track.egressId);
-          } catch (error) {
-      server.log.error({ error, egressId: track.egressId }, "Failed to stop egress");
-          }
-          track.endedAt = endedAt;
+      for (const track of manifest.tracks) {
+        try {
+          await egressClient.stopEgress(track.egressId);
+        } catch (error) {
+          server.log.error({ error, egressId: track.egressId }, "Failed to stop egress");
         }
       }
 
@@ -496,5 +512,136 @@ export const buildServer = (config: AppConfig, deps?: Partial<ServerDeps>) => {
     }
   });
 
+  setupSyncPlane(server.server, config);
+
   return server;
+};
+
+const setupSyncPlane = (httpServer: import("http").Server, config: AppConfig) => {
+  const wss = new WebSocketServer({ server: httpServer, path: "/sync" });
+  const clients = new Map<WebSocket, SyncClient>();
+  const rooms = new Map<string, Set<WebSocket>>();
+
+  const removeFromRoom = (socket: WebSocket, room?: string) => {
+    if (!room) {
+      return;
+    }
+    const set = rooms.get(room);
+    if (!set) {
+      return;
+    }
+    set.delete(socket);
+    if (!set.size) {
+      rooms.delete(room);
+    }
+  };
+
+  const sendJson = (socket: WebSocket, payload: unknown) => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    socket.send(JSON.stringify(payload));
+  };
+
+  const broadcast = (room: string, payload: unknown) => {
+    const set = rooms.get(room);
+    if (!set) {
+      return;
+    }
+    for (const socket of set) {
+      sendJson(socket, payload);
+    }
+  };
+
+  const parseMessage = (data: RawData) => {
+    try {
+      const text = typeof data === "string" ? data : data.toString();
+      return JSON.parse(text) as SyncJoinMessage | SyncStateMessage;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  wss.on("connection", (socket) => {
+    clients.set(socket, { isMaster: false });
+
+    socket.on("message", (data) => {
+      const message = parseMessage(data);
+      if (!message || typeof message.type !== "string") {
+        sendJson(socket, { type: "error", error: "invalid message" });
+        return;
+      }
+
+      const client = clients.get(socket);
+      if (!client) {
+        return;
+      }
+
+      if (message.type === "join") {
+        const join = message as SyncJoinMessage;
+        if (!join.room || (join.role !== "master" && join.role !== "peer")) {
+          sendJson(socket, { type: "error", error: "invalid join payload" });
+          return;
+        }
+        removeFromRoom(socket, client.room);
+        client.room = join.room;
+        client.role = join.role;
+        client.isMaster = join.role === "master" && join.masterKey === config.masterKey;
+        clients.set(socket, client);
+
+        if (!rooms.has(join.room)) {
+          rooms.set(join.room, new Set());
+        }
+        rooms.get(join.room)?.add(socket);
+
+        sendJson(socket, { type: "joined", room: join.room, role: join.role, isMaster: client.isMaster });
+        return;
+      }
+
+      if (message.type === "state") {
+        const state = message as SyncStateMessage;
+        if (!client.room) {
+          sendJson(socket, { type: "error", error: "not joined" });
+          return;
+        }
+        if (!client.isMaster) {
+          sendJson(socket, { type: "error", error: "not authorized" });
+          return;
+        }
+        if (!Number.isFinite(state.tempo) || state.tempo <= 0) {
+          sendJson(socket, { type: "error", error: "invalid tempo" });
+          return;
+        }
+        if (!["stopped", "playing", "paused"].includes(state.transport)) {
+          sendJson(socket, { type: "error", error: "invalid transport" });
+          return;
+        }
+
+        broadcast(client.room, {
+          type: "state",
+          tempo: state.tempo,
+          transport: state.transport,
+          at: Date.now()
+        });
+        return;
+      }
+
+      if (message.type === "ping") {
+        const ping = message as SyncPingMessage;
+        if (!Number.isFinite(ping.sentAt)) {
+          sendJson(socket, { type: "error", error: "invalid ping" });
+          return;
+        }
+        sendJson(socket, { type: "pong", sentAt: ping.sentAt, serverAt: Date.now() });
+      }
+    });
+
+    socket.on("close", () => {
+      const client = clients.get(socket);
+      if (client?.room) {
+        removeFromRoom(socket, client.room);
+      }
+      clients.delete(socket);
+    });
+  });
 };

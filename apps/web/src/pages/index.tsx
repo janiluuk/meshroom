@@ -59,6 +59,7 @@ type ParticipantStats = {
   rttMs?: number;
   jitterMs?: number;
   packetLossPct?: number;
+  path?: "p2p" | "relay" | "unknown";
 };
 
 type SessionResponse = {
@@ -68,6 +69,20 @@ type SessionResponse = {
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const midiInputStorageKey = "remote-dj:midi-input";
 const midiOutputStorageKey = "remote-dj:midi-output";
+const programOutUrl = process.env.NEXT_PUBLIC_PROGRAM_OUT_URL ?? "";
+const syncUrl = (() => {
+  if (process.env.NEXT_PUBLIC_SYNC_URL) {
+    return process.env.NEXT_PUBLIC_SYNC_URL;
+  }
+  try {
+    const base = new URL(apiBaseUrl);
+    base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+    base.pathname = "/sync";
+    return base.toString();
+  } catch (error) {
+    return apiBaseUrl.replace(/^http/, "ws") + "/sync";
+  }
+})();
 
 const latencyClass = (rttMs?: number) => {
   if (!rttMs) {
@@ -94,6 +109,32 @@ const formatPercent = (value?: number) => {
     return "--";
   }
   return `${value.toFixed(1)}%`;
+};
+
+const getNetworkQuality = (
+  rttMs?: number,
+  jitterMs?: number,
+  packetLossPct?: number
+): { label: string; className: string } => {
+  if (rttMs === undefined && jitterMs === undefined && packetLossPct === undefined) {
+    return { label: "unknown", className: "quality-badge unknown" };
+  }
+  const loss = packetLossPct ?? 0;
+  const rtt = rttMs ?? 0;
+  const jitter = jitterMs ?? 0;
+  if (rtt < 120 && jitter < 30 && loss < 1) {
+    return { label: "good", className: "quality-badge good" };
+  }
+  if (rtt < 250 && jitter < 60 && loss < 3) {
+    return { label: "fair", className: "quality-badge fair" };
+  }
+  return { label: "poor", className: "quality-badge poor" };
+};
+
+const formatDuration = (totalSeconds: number) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
 const fetchJson = async <T,>(url: string, options?: RequestInit): Promise<T> => {
@@ -148,6 +189,20 @@ const parseStats = (rawStats: unknown) => {
     return value < 10 ? value * 1000 : value;
   };
 
+  const toPath = (value: unknown) => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const normalized = value.toLowerCase();
+    if (normalized.includes("relay")) {
+      return "relay" as const;
+    }
+    if (normalized.includes("host") || normalized.includes("srflx")) {
+      return "p2p" as const;
+    }
+    return undefined;
+  };
+
   for (const stats of statsList) {
     const identity =
       (stats.participantIdentity as string | undefined) ||
@@ -164,6 +219,9 @@ const parseStats = (rawStats: unknown) => {
     const jitter = toMs(toNumber(stats.jitter));
     const packetsLost = toNumber(stats.packetsLost ?? stats.packets_lost);
     const packetsReceived = toNumber(stats.packetsReceived ?? stats.packets_received);
+    const candidateType = stats.candidateType ?? stats.localCandidateType ?? stats.remoteCandidateType;
+    const relayProtocol = stats.relayProtocol;
+    const path = relayProtocol ? "relay" : toPath(candidateType) ?? current.path;
     let packetLossPct = current.packetLossPct;
 
     if (packetsLost !== undefined && packetsReceived !== undefined) {
@@ -176,7 +234,8 @@ const parseStats = (rawStats: unknown) => {
     byIdentity.set(identity, {
       rttMs: rtt ?? current.rttMs,
       jitterMs: jitter ?? current.jitterMs,
-      packetLossPct
+      packetLossPct,
+      path
     });
   }
 
@@ -245,6 +304,7 @@ type ParticipantTileProps = {
   deviceInfo?: DeviceSnapshot;
   midiLabels?: MidiLabels;
   audioLevel?: number;
+  isRecording?: boolean;
   version: number;
 };
 
@@ -256,6 +316,7 @@ const ParticipantTile = ({
   deviceInfo,
   midiLabels,
   audioLevel,
+  isRecording,
   version
 }: ParticipantTileProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -300,6 +361,9 @@ const ParticipantTile = ({
   const roleBadge = metadata?.role || (isLocal ? "local" : "peer");
   const showAvatar = !videoTrack || videoPublication?.isMuted;
   const audioLevelValue = Math.min(Math.max(audioLevel ?? 0, 0), 1);
+  const quality = getNetworkQuality(stats?.rttMs, stats?.jitterMs, stats?.packetLossPct);
+  const pathLabel =
+    stats?.path === "relay" ? "Relay" : stats?.path === "p2p" ? "P2P" : "Unknown";
 
   return (
     <div className="tile">
@@ -316,10 +380,14 @@ const ParticipantTile = ({
       <div>
         <div className="tile-header">
           <div className="tile-name">{identity}</div>
-          <div className="status-pill">{connectionState}</div>
+          <div className="tile-header-right">
+            {isRecording ? <span className="rec-pill">REC</span> : null}
+            <div className="status-pill">{connectionState}</div>
+          </div>
         </div>
         <div className="tile-sub">
           <span className="role-badge">{roleBadge}</span>
+          <span className={quality.className}>{quality.label}</span>
           {isLocal ? <span className="status-pill">You</span> : null}
         </div>
         <div className="tile-body">
@@ -344,6 +412,10 @@ const ParticipantTile = ({
           <div className="metric">
             <span>Packet loss</span>
             <strong>{formatPercent(stats?.packetLossPct)}</strong>
+          </div>
+          <div className="metric">
+            <span>Path</span>
+            <strong>{pathLabel}</strong>
           </div>
           <div className="device-list">
             <div>Cam: {deviceInfo?.cam || metadata?.devices?.cam || (isLocal ? "--" : "Remote")}</div>
@@ -389,13 +461,26 @@ const HomePage = () => {
   const [audioLevels, setAudioLevels] = useState<Map<string, number>>(new Map());
   const [sendMidiClock, setSendMidiClock] = useState(false);
 
-  const [masterKey, setMasterKey] = useState("");
+  const [masterKey, setMasterKey] = useState(process.env.NEXT_PUBLIC_MASTER_KEY ?? "");
   const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<"idle" | "recording" | "stopped">("idle");
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [playbackSessionId, setPlaybackSessionId] = useState<string | null>(null);
   const [programStatus, setProgramStatus] = useState<"idle" | "running">("idle");
   const [programError, setProgramError] = useState<string | null>(null);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const [syncTempo, setSyncTempo] = useState(120);
+  const [syncTransport, setSyncTransport] = useState<"stopped" | "playing" | "paused">("stopped");
+  const [syncStatus, setSyncStatus] = useState<"idle" | "connecting" | "connected" | "error">(
+    "idle"
+  );
+  const [syncRttMs, setSyncRttMs] = useState<number | undefined>(undefined);
+  const [syncJitterMs, setSyncJitterMs] = useState<number | undefined>(undefined);
+  const syncSocketRef = useRef<WebSocket | null>(null);
+  const syncIntervalRef = useRef<number | null>(null);
+  const syncRttHistoryRef = useRef<number[]>([]);
+  const syncPingIntervalRef = useRef<number | null>(null);
 
   const updateParticipants = useCallback((currentRoom: Room) => {
     const list = [currentRoom.localParticipant, ...Array.from(currentRoom.remoteParticipants.values())];
@@ -600,6 +685,172 @@ const HomePage = () => {
   }, [midiStatus, sendMidiClock]);
 
   useEffect(() => {
+    if (recordingStatus !== "recording" || recordingStartedAt === null) {
+      setRecordingElapsed(0);
+      return;
+    }
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - recordingStartedAt) / 1000);
+      setRecordingElapsed(elapsed);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [recordingStatus, recordingStartedAt]);
+
+  useEffect(() => {
+    if (!room) {
+      if (syncSocketRef.current) {
+        syncSocketRef.current.close();
+        syncSocketRef.current = null;
+      }
+      setSyncStatus("idle");
+      setSyncRttMs(undefined);
+      setSyncJitterMs(undefined);
+      return;
+    }
+
+    const socket = new WebSocket(syncUrl);
+    syncSocketRef.current = socket;
+    setSyncStatus("connecting");
+
+    const sendMessage = (payload: unknown) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(payload));
+      }
+    };
+
+    socket.onopen = () => {
+      setSyncStatus("connected");
+      sendMessage({
+        type: "join",
+        room: roomName,
+        role,
+        masterKey: role === "master" ? masterKey : undefined
+      });
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data as string) as {
+          type: string;
+          tempo?: number;
+          transport?: "stopped" | "playing" | "paused";
+          sentAt?: number;
+        };
+        if (message.type === "state") {
+          if (typeof message.tempo === "number") {
+            setSyncTempo(message.tempo);
+          }
+          if (message.transport) {
+            setSyncTransport(message.transport);
+          }
+        } else if (message.type === "pong" && typeof message.sentAt === "number") {
+          const rtt = performance.now() - message.sentAt;
+          if (Number.isFinite(rtt)) {
+            const history = syncRttHistoryRef.current;
+            history.push(rtt);
+            if (history.length > 6) {
+              history.shift();
+            }
+            setSyncRttMs(Math.round(rtt));
+            if (history.length > 1) {
+              const diffs = history.slice(1).map((value, index) => Math.abs(value - history[index]));
+              const avg = diffs.reduce((sum, value) => sum + value, 0) / diffs.length;
+              setSyncJitterMs(Math.round(avg));
+            }
+          }
+        }
+      } catch (error) {
+        // ignore
+      }
+    };
+
+    socket.onerror = () => {
+      setSyncStatus("error");
+    };
+
+    socket.onclose = () => {
+      setSyncStatus("idle");
+      setSyncRttMs(undefined);
+      setSyncJitterMs(undefined);
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [room, roomName, role, masterKey]);
+
+  useEffect(() => {
+    if (role !== "master" || syncStatus !== "connected") {
+      if (syncIntervalRef.current) {
+        window.clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+      return;
+    }
+    const socket = syncSocketRef.current;
+    if (!socket) {
+      return;
+    }
+    const sendState = () => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      socket.send(
+        JSON.stringify({
+          type: "state",
+          tempo: syncTempo,
+          transport: syncTransport
+        })
+      );
+    };
+    sendState();
+    syncIntervalRef.current = window.setInterval(sendState, 250);
+    return () => {
+      if (syncIntervalRef.current) {
+        window.clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+    };
+  }, [role, syncStatus, syncTempo, syncTransport]);
+
+  useEffect(() => {
+    if (syncStatus !== "connected") {
+      if (syncPingIntervalRef.current) {
+        window.clearInterval(syncPingIntervalRef.current);
+        syncPingIntervalRef.current = null;
+      }
+      return;
+    }
+    const socket = syncSocketRef.current;
+    if (!socket) {
+      return;
+    }
+    const sendPing = () => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      socket.send(
+        JSON.stringify({
+          type: "ping",
+          sentAt: performance.now()
+        })
+      );
+    };
+    sendPing();
+    syncPingIntervalRef.current = window.setInterval(sendPing, 2000);
+    return () => {
+      if (syncPingIntervalRef.current) {
+        window.clearInterval(syncPingIntervalRef.current);
+        syncPingIntervalRef.current = null;
+      }
+    };
+  }, [syncStatus]);
+
+  useEffect(() => {
     if (!room) {
       return;
     }
@@ -735,10 +986,11 @@ const HomePage = () => {
         headers: {
           "x-master-key": masterKey
         },
-        body: JSON.stringify({ roomName })
+        body: JSON.stringify({ room: roomName })
       });
       setRecordingSessionId(response.sessionId);
       setRecordingStatus("recording");
+      setRecordingStartedAt(Date.now());
       setPlaybackSessionId(null);
     } catch (error) {
       setRecordingError(error instanceof Error ? error.message : "Failed to start recording");
@@ -759,6 +1011,7 @@ const HomePage = () => {
         body: JSON.stringify({ sessionId: recordingSessionId })
       });
       setRecordingStatus("stopped");
+      setRecordingStartedAt(null);
       setPlaybackSessionId(recordingSessionId);
       setRecordingSessionId(null);
     } catch (error) {
@@ -830,11 +1083,11 @@ const HomePage = () => {
         <div className="session-bar">
           <div className="session-item">
             <span>Tempo</span>
-            <strong>120 BPM</strong>
+            <strong>{syncTempo} BPM</strong>
           </div>
           <div className="session-item">
             <span>Transport</span>
-            <strong>Stopped</strong>
+            <strong>{syncTransport}</strong>
           </div>
           <div className="session-item">
             <span>Quantize</span>
@@ -1003,6 +1256,9 @@ const HomePage = () => {
             <div className="recording-row">
               <strong>Recording control</strong>
               <span className="status-pill">{recordingStatus}</span>
+              {recordingStatus === "recording" ? (
+                <span className="rec-timer">⏺ {formatDuration(recordingElapsed)}</span>
+              ) : null}
             </div>
             <div className="recording-row">
               <input
@@ -1053,6 +1309,16 @@ const HomePage = () => {
                 Stop Program Out
               </button>
             </div>
+            {programOutUrl ? (
+              <div className="program-url">
+                <span>OBS ingest URL</span>
+                <code>{programOutUrl}</code>
+              </div>
+            ) : (
+              <div className="help-text">
+                Set `NEXT_PUBLIC_PROGRAM_OUT_URL` to display the OBS ingest URL.
+              </div>
+            )}
             {programError ? <div style={{ color: "var(--danger)" }}>{programError}</div> : null}
           </div>
         ) : null}
@@ -1062,6 +1328,12 @@ const HomePage = () => {
             const isLocal = room?.localParticipant?.identity === participant.identity;
             const stats = participantStats.get(participant.identity ?? "");
             const level = audioLevels.get(participant.identity ?? "") ?? 0;
+            const effectiveStats: ParticipantStats = {
+              rttMs: syncRttMs ?? stats?.rttMs,
+              jitterMs: syncJitterMs ?? stats?.jitterMs,
+              packetLossPct: stats?.packetLossPct,
+              path: stats?.path ?? "unknown"
+            };
             const tileConnectionState = isLocal
               ? connectionState === "reconnecting"
                 ? "reconnecting"
@@ -1077,10 +1349,11 @@ const HomePage = () => {
                 participant={participant}
                 isLocal={isLocal}
                 connectionState={tileConnectionState}
-                stats={stats}
+                stats={effectiveStats}
                 deviceInfo={isLocal ? deviceInfo : undefined}
                 midiLabels={isLocal ? localMidiLabels : undefined}
                 audioLevel={level}
+                isRecording={recordingStatus === "recording"}
                 version={trackVersion}
               />
             );

@@ -6,26 +6,24 @@ describe("manifest creation", () => {
   it("strips egress-only fields and preserves timing", () => {
     const session: ActiveSession = {
       sessionId: "session-123",
-      roomName: "room-a",
+      room: "room-a",
       startedAt: "2024-01-01T00:00:00.000Z",
       endedAt: "2024-01-01T00:05:00.000Z",
       participants: [
         {
           identity: "alice",
-          tracks: [
-            {
-              trackId: "track-a",
-              kind: "audio",
-              url: "http://minio/sessions/session-123/alice/track-a.mp4",
-              container: "mp4",
-              codec: "aac",
-              startedAt: "2024-01-01T00:00:01.000Z",
-              endedAt: "2024-01-01T00:05:00.000Z",
-              reconnectMarkers: [],
-              egressId: "egress-1",
-              fileKey: "sessions/session-123/alice/track-a.mp4"
-            }
-          ]
+          name: "Alice"
+        }
+      ],
+      tracks: [
+        {
+          participantIdentity: "alice",
+          participantName: "Alice",
+          kind: "audio",
+          url: "http://minio/sessions/session-123/alice/audio.mp4",
+          startedAt: "2024-01-01T00:00:01.000Z",
+          egressId: "egress-1",
+          fileKey: "sessions/session-123/alice/audio.mp4"
         }
       ]
     };
@@ -34,26 +32,25 @@ describe("manifest creation", () => {
 
     expect(manifest).toEqual({
       sessionId: "session-123",
-      roomName: "room-a",
+      room: "room-a",
       startedAt: "2024-01-01T00:00:00.000Z",
       endedAt: "2024-01-01T00:05:00.000Z",
       participants: [
         {
           identity: "alice",
-          tracks: [
-            {
-              trackId: "track-a",
-              kind: "audio",
-              url: "http://minio/sessions/session-123/alice/track-a.mp4",
-              container: "mp4",
-              codec: "aac",
-              startedAt: "2024-01-01T00:00:01.000Z",
-              endedAt: "2024-01-01T00:05:00.000Z",
-              reconnectMarkers: []
-            }
-          ]
+          name: "Alice"
         }
-      ]
+      ],
+      tracks: [
+        {
+          participantIdentity: "alice",
+          participantName: "Alice",
+          kind: "audio",
+          url: "http://minio/sessions/session-123/alice/audio.mp4",
+          startOffsetMs: 1000
+        }
+      ],
+      masterMixUrl: undefined
     });
   });
 });

@@ -2,46 +2,35 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type ReconnectMarker = {
-  startedAt: string;
-  endedAt?: string;
-  reason?: string;
-};
-
 type TrackManifest = {
-  trackId: string;
-  kind: string;
+  participantIdentity: string;
+  participantName?: string;
+  kind: "audio";
   url: string;
-  container: string;
-  codec: string;
-  startedAt: string;
-  endedAt?: string;
-  reconnectMarkers: ReconnectMarker[];
+  startOffsetMs?: number;
 };
 
 type ParticipantManifest = {
   identity: string;
-  tracks: TrackManifest[];
+  name?: string;
 };
 
 type SessionManifest = {
   sessionId: string;
-  roomName: string;
+  room: string;
   startedAt: string;
   endedAt?: string;
   participants: ParticipantManifest[];
+  tracks: TrackManifest[];
+  masterMixUrl?: string;
 };
 
 type TrackState = {
   id: string;
   identity: string;
+  displayName: string;
   kind: "audio" | "video" | "unknown";
   url: string;
-  container: string;
-  codec: string;
-  startedAt: string;
-  endedAt?: string;
-  reconnectMarkers: ReconnectMarker[];
   offsetSec: number;
   durationSec?: number;
   status: "loading" | "ready" | "error";
@@ -52,17 +41,6 @@ type TrackState = {
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
-const toSeconds = (value: string | undefined) => {
-  if (!value) {
-    return undefined;
-  }
-  const time = Date.parse(value);
-  if (Number.isNaN(time)) {
-    return undefined;
-  }
-  return time / 1000;
-};
 
 const formatTime = (value: number | undefined) => {
   if (value === undefined || !Number.isFinite(value)) {
@@ -88,6 +66,7 @@ const PlaybackPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playheadSec, setPlayheadSec] = useState(0);
+  const [missingOffsets, setMissingOffsets] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
@@ -361,41 +340,56 @@ const PlaybackPage = () => {
       return;
     }
 
-    const sessionStart = toSeconds(manifest.startedAt);
-    if (sessionStart === undefined) {
-      setError("Invalid session start time");
-      return;
-    }
+    const nameByIdentity = new Map(
+      manifest.participants.map((participant) => [
+        participant.identity,
+        participant.name ?? participant.identity
+      ])
+    );
 
     const flattened: TrackState[] = [];
-    for (const participant of manifest.participants) {
-      for (const track of participant.tracks) {
-        const trackStart = toSeconds(track.startedAt) ?? sessionStart;
-        const offsetSec = Math.max(trackStart - sessionStart, 0);
-        const trackEnd = toSeconds(track.endedAt);
-        const durationSec = trackEnd ? Math.max(trackEnd - trackStart, 0) : undefined;
-        const kind = track.kind === "audio" || track.kind === "video" ? track.kind : "unknown";
-        flattened.push({
-          id: `${participant.identity}:${track.trackId}`,
-          identity: participant.identity,
-          kind,
-          url: track.url,
-          container: track.container,
-          codec: track.codec,
-          startedAt: track.startedAt,
-          endedAt: track.endedAt,
-          reconnectMarkers: track.reconnectMarkers ?? [],
-          offsetSec,
-          durationSec,
-          status: "loading",
-          volume: 0.9,
-          muted: false,
-          solo: false
-        });
+    let missingOffsetDetected = false;
+    for (const track of manifest.tracks) {
+      if (track.startOffsetMs === undefined) {
+        missingOffsetDetected = true;
       }
+      const offsetMs = track.startOffsetMs ?? 0;
+      const offsetSec = Math.max(offsetMs / 1000, 0);
+      const kind = track.kind === "audio" ? "audio" : "unknown";
+      const identity = track.participantIdentity;
+      flattened.push({
+        id: `${identity}:${track.url}`,
+        identity,
+        displayName: track.participantName ?? nameByIdentity.get(identity) ?? identity,
+        kind,
+        url: track.url,
+        offsetSec,
+        durationSec: undefined,
+        status: "loading",
+        volume: 0.9,
+        muted: false,
+        solo: false
+      });
+    }
+
+    if (manifest.masterMixUrl) {
+      flattened.push({
+        id: `master-mix:${manifest.masterMixUrl}`,
+        identity: "master-mix",
+        displayName: "Master Mix",
+        kind: "audio",
+        url: manifest.masterMixUrl,
+        offsetSec: 0,
+        durationSec: undefined,
+        status: "loading",
+        volume: 0.9,
+        muted: false,
+        solo: false
+      });
     }
 
     setTracks(flattened);
+    setMissingOffsets(missingOffsetDetected);
   }, [manifest]);
 
   useEffect(() => {
@@ -479,6 +473,22 @@ const PlaybackPage = () => {
   }, [tracks, applyTrackGains]);
 
   const soloActive = tracks.some((track) => track.solo);
+  const downloadStems = () => {
+    if (!manifest) {
+      return;
+    }
+    const payload = {
+      manifest,
+      files: manifest.tracks.map((track) => track.url)
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `session-${manifest.sessionId}-stems.json`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 500);
+  };
 
   return (
     <>
@@ -505,9 +515,9 @@ const PlaybackPage = () => {
               <div>
                 <strong>Session:</strong> {manifest.sessionId}
               </div>
-              <div>
-                <strong>Room:</strong> {manifest.roomName}
-              </div>
+            <div>
+              <strong>Room:</strong> {manifest.room}
+            </div>
               <div>
                 <strong>Started:</strong> {manifest.startedAt}
               </div>
@@ -520,6 +530,9 @@ const PlaybackPage = () => {
                 </button>
                 <button className="ghost" onClick={stopPlayback} disabled={isLoadingTracks}>
                   Stop
+                </button>
+                <button className="ghost" onClick={downloadStems} disabled={!manifest}>
+                  Download stems
                 </button>
                 <div className="transport-time">
                   {formatTime(playheadSec)} / {formatTime(sessionDurationSec)}
@@ -536,6 +549,12 @@ const PlaybackPage = () => {
                 disabled={isLoadingTracks}
               />
               {isLoadingTracks ? <div className="help-text">Decoding tracks...</div> : null}
+              {missingOffsets ? (
+                <div className="help-text">
+                  Some tracks are missing offsets; playback starts them at t=0 for best-effort
+                  alignment.
+                </div>
+              ) : null}
               {soloActive ? <div className="help-text">Solo active: non-solo tracks muted.</div> : null}
             </div>
 
@@ -551,18 +570,15 @@ const PlaybackPage = () => {
                   <div className="track-card" key={track.id}>
                     <div className="track-header">
                       <div>
-                        <div className="track-title">{track.identity}</div>
-                        <div className="track-sub">
-                          {track.kind} · {track.codec} ({track.container})
-                        </div>
-                      </div>
-                      <div className="status-pill">{statusLabel}</div>
+                      <div className="track-title">{track.displayName}</div>
+                      <div className="track-sub">{track.kind}</div>
                     </div>
-                    <div className="track-meta">
-                      <span>Offset: {formatTime(track.offsetSec)}</span>
-                      <span>Duration: {formatTime(track.durationSec)}</span>
-                      <span>Reconnects: {track.reconnectMarkers.length}</span>
-                    </div>
+                    <div className="status-pill">{statusLabel}</div>
+                  </div>
+                  <div className="track-meta">
+                    <span>Offset: {formatTime(track.offsetSec)}</span>
+                    <span>Duration: {formatTime(track.durationSec)}</span>
+                  </div>
                     {track.error ? <div className="notice warning">{track.error}</div> : null}
                     <div className="track-controls">
                       <button
