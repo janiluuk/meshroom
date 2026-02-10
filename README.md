@@ -31,7 +31,6 @@ Early docker based development version, more accessible installer in plans once 
 
 ![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
 
-![screenshots_3](https://github.com/janiluuk/meshroom/blob/main/screenshots_3.png)]
 
 ## Prereqs
 
@@ -97,6 +96,9 @@ pnpm dev:sync
 
 - Start Program Out in the master UI
 - In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
+
+9) Use your own grooves or some pre-selected ones to start off the jam if you prefer;
+![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)]
 
 ## API endpoints
 
