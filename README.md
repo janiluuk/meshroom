@@ -32,6 +32,43 @@ Early docker based development version, more accessible installer in plans once 
 ![screenshots_1](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)]
 
 
+4) Map midi controls or use your presets;
+
+![midi mapping](https://github.com/janiluuk/meshroom/blob/main/midi_mapping.png)]
+
+5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
+
+```bash
+pnpm dev:sync
+```
+![session_create(https://github.com/janiluuk/meshroom/blob/main/session_create.png)]
+
+6) Open the web app, sign in, create a session, then join twice (master + peer)
+
+- Web: http://localhost:3000
+- API: http://localhost:4000
+- API health: http://localhost:4000/health
+- API ready: http://localhost:4000/ready
+- LiveKit: ws://localhost:7880
+- MinIO: http://localhost:9000 (console http://localhost:9001)
+
+7) Start recording, stop, open playback
+
+- Use the master controls to start and stop a recording
+- Click the playback link to open the aligned session view
+
+8) Start Program Out and ingest in OBS
+
+- Start Program Out in the master UI
+- In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
+
+9) Use your own grooves or some pre-selected ones to start off the jam if you prefer;
+![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)]
+
+
+
+# Installation
+
 ## Prereqs
 
 - Node.js 18+
@@ -71,42 +108,6 @@ pnpm dev
 ```
 
 Or use `pnpm infra:up` from the repo root.
-
-4)
-
-
-4) Map midi controls or use your presets;
-
-![midi mapping](https://github.com/janiluuk/meshroom/blob/main/midi_mapping.png)]
-
-5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
-
-```bash
-pnpm dev:sync
-```
-![session_create(https://github.com/janiluuk/meshroom/blob/main/session_create.png)]
-
-6) Open the web app, sign in, create a session, then join twice (master + peer)
-
-- Web: http://localhost:3000
-- API: http://localhost:4000
-- API health: http://localhost:4000/health
-- API ready: http://localhost:4000/ready
-- LiveKit: ws://localhost:7880
-- MinIO: http://localhost:9000 (console http://localhost:9001)
-
-7) Start recording, stop, open playback
-
-- Use the master controls to start and stop a recording
-- Click the playback link to open the aligned session view
-
-8) Start Program Out and ingest in OBS
-
-- Start Program Out in the master UI
-- In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
-
-9) Use your own grooves or some pre-selected ones to start off the jam if you prefer;
-![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)]
 
 ## API endpoints
 
