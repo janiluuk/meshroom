@@ -1,10 +1,12 @@
 # Meshroom
 
-Bring back the fun of doing stuff together. It may not sound good always but having a soul is an essence that cannot be learned by any entity.
+Bring back the fun of doing stuff together. It may not sound good always but having a soul is an essence that cannot be learned by any entity.  
 
 Meshroom is a web-based remote DJ/Ableton collaboration app for up to 4 people. At minimum it needs human with midi controller and WebMIDI supported browser. Other DAW's with Midi Sync support are supported as well. 
 
-Purpose of this project is to fill the void for live collaboration and music making. If you are familiar with existing choices such as Ninjam, Jamulus or Jamtaba, this has the same core principle but without the technical workload, custom plugins and other fuzz that kills the buzz. Start session, invite people, open your favourite DAW, link your controllers and rest is up to you. 
+Purpose of this project is to fill the void for live collaboration and music making. If you are familiar with existing choices such as Ninjam, Jamulus or Jamtaba, this has the same core principle but without the technical workload, custom plugins and other fuzz that kills the buzz. 
+
+Start session, invite people, open your favourite DAW, link your controllers and rest is up to you.
 
 - Uses either Ableton Link (through local proxy) or traditional Midi Sync.
 - Session room with latency indicators, channel assignments, voice discussions and audio previews individually and together.
@@ -16,16 +18,16 @@ Purpose of this project is to fill the void for live collaboration and music mak
 - Overdubbing individually or together (e.g. vocalist part over others performance)
 - WebMIDI support (For players with just laptop and midi controller). Requires Chrome - compatible browser at this stage.
 - OBS Studio support for further broadcasting on live situations.
-- User running the master DAW (or e.g. Omnisphere) can map user midi controls to specific VST / AU synth. Current preset name is seen on WebUI.
+- User running the master DAW (or e.g. Omnisphere) can map user midi controls to specific VST / AU synth. 
+- Current preset name is seen on WebUI.
 - By default users are mapped to MIDI channels 2-5. Users can be changed to Omnichannel mode.
-- Easy Export results for further processing and mixdown.
+- Easy Export results for further processing and mixdown. 
 - Basic trim, normalization, compression and limiter processing can be added for master or individual channels through quick menu.
 - Timeshift to specific state in project, uses git for storing session directory's state.
 
 Early docker based development version, more accessible installer in plans once core features have been completed.
 
 *Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)*
-
 
 ## Prereqs
 
