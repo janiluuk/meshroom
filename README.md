@@ -37,7 +37,10 @@ Early docker based development version, more accessible installer in plans once 
 
 Note that Ableton Link works on local network, so you'll need to use the included utility to get it enabled. It is super accurate, but limits the DAW to Ableton and is not officially supported method.
 
-If in doubt, use Midi Clock Sync
+If in doubt, use Midi Clock Sync. 
+Then select initial BPM and quantization values. Quantization can be disabled if you dont want to sound boringly accurate. 
+
+**Recommended values for session with slow connection participant: 1/2 -> 1 bar, otherwise 1/8 - 1/16** 
 
 ![session](https://github.com/janiluuk/meshroom/blob/main/session_create.png)
 
