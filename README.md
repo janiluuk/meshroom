@@ -33,12 +33,15 @@ Early docker based development version, more accessible installer in plans once 
 
 ![main_screens](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)
 
-### Session creation 
+### Session creation (Mellowyellow theme)
 
 ![session](https://github.com/janiluuk/meshroom/blob/main/session_create.png)
 
 
-### Mapping your midi controller after connecting is easy. 
+## Mapping your midi controller
+
+You'll need to select which know in your controller controls which parameter. 
+Synth-specific defaults presets are planned for Vital, Arturia, and Serum.
 
 You can save parameter set as a snapshot to use later on, or just restore after getting lost in the sonic oblibion.
 
@@ -48,6 +51,7 @@ You can save parameter set as a snapshot to use later on, or just restore after 
 
 
 ### Groove Library (Purplederp theme)
+
 Use your own grooves or some pre-selected ones to start off the jam if you prefer;
 
 ![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)
