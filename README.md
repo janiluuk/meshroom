@@ -65,7 +65,7 @@ pnpm dev
 
 - `POST /auth/token` -> `{ room, identity, name?, role }`
 - `GET /rooms/:room` -> room info (404 if not found)
-- `POST /recording/start` (privileged) -> `{ roomName }`
+- `POST /recording/start` (privileged) -> `{ room }` returns `{ sessionId }`
 - `POST /recording/stop` (privileged) -> `{ sessionId }`
 - `POST /program/start` (privileged) -> `{ roomName }`
 - `POST /program/stop` (privileged)
@@ -95,7 +95,7 @@ Start recording:
 curl -s http://localhost:4000/recording/start \\
   -H "Content-Type: application/json" \\
   -H "x-master-key: $MASTER_KEY" \\
-  -d '{\"roomName\":\"studio-1\"}'
+  -d '{\"room\":\"studio-1\"}'
 ```
 
 Stop recording:
@@ -123,14 +123,40 @@ curl -s http://localhost:4000/program/stop \\
   -H "x-master-key: $MASTER_KEY"
 ```
 
+Manifest shape:
+
+```json
+{
+  "room": "studio-1",
+  "sessionId": "session-uuid",
+  "startedAt": "2024-01-01T00:00:00.000Z",
+  "endedAt": "2024-01-01T00:10:00.000Z",
+  "participants": [
+    { "identity": "dj-1", "name": "DJ 1" }
+  ],
+  "tracks": [
+    {
+      "participantIdentity": "dj-1",
+      "participantName": "DJ 1",
+      "kind": "audio",
+      "url": "http://localhost:9000/recordings/sessions/<id>/dj-1/audio.mp4",
+      "startOffsetMs": 0
+    }
+  ]
+}
+```
+
 ## Program Out (OBS)
 
 Program Out sends a single stream (RTMP) from LiveKit Egress to the URL in `PROGRAM_OUT_RTMP_URL`.
 
 1) Start Program Out from the master UI.
 2) In OBS, add a source:
-   - Media Source or FFmpeg Source
-   - Input the same stream URL from `PROGRAM_OUT_RTMP_URL`
+   - Click **+** in Sources
+   - Choose **Media Source** (or **FFmpeg Source**)
+   - Name it `Program Out`
+   - Uncheck **Local File**
+   - Set the input URL to the exact `PROGRAM_OUT_RTMP_URL`
 3) Start playback/recording in OBS.
 
 ## Smoke test
