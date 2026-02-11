@@ -1,12 +1,12 @@
 # Meshroom
 
-Bring back the fun of doing stuff together. It may not sound good always but having a soul is an essence that cannot be learned by any entity.  
+Bring back the fun of doing stuff together. It may not sound good always but having a soul is an essence that cannot be learned by any entity or other person.  
 
 Meshroom is a web-based remote DJ/Ableton collaboration app for up to 4 people. At minimum it needs human with midi controller and WebMIDI supported browser. Other DAW's with Midi Sync support are supported as well. 
 
-Purpose of this project is to fill the void for live collaboration and music making. If you are familiar with existing choices such as Ninjam, Jamulus or Jamtaba, this has the same core principle but without the technical workload, custom plugins and other fuzz that kills the buzz. 
+Purpose of this project is to fill the void for live collaboration in music making. If you are familiar with existing choices such as Ninjam, Jamulus or Jamtaba, this has the same core principle but without the technical workload, extremely clunky setup for smooth interaction, or custom plugins .. or the other fuzz that kills the buzz. 
 
-Start session, invite people, open your favourite DAW, link your controllers and rest is up to you.
+Start session, invite your friends, open your favourite DAW, link your controllers and rest is up to you. Do it together or in turns.
 
 - Uses either Ableton Link (through local proxy) or traditional Midi Sync.
 - Session room with latency indicators, channel assignments, voice discussions and audio previews individually and together.
@@ -27,7 +27,46 @@ Start session, invite people, open your favourite DAW, link your controllers and
 
 Early docker based development version, more accessible installer in plans once core features have been completed.
 
-*Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)*
+**Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)**
+
+### Session creation (Mellowyellow theme)
+
+Note that Ableton Link works on local network, so you'll need to use the included utility to get it enabled. It is super accurate, but limits the DAW to Ableton and is not officially supported method.
+
+If in doubt, use Midi Clock Sync. 
+Then select initial BPM and quantization values. Quantization can be disabled if you dont want to sound boringly accurate. 
+
+**Recommended values for session with slow connection participant: 1/2 -> 1 bar, otherwise 1/8 - 1/16**
+
+![session](https://github.com/janiluuk/meshroom/blob/main/session_create.png)
+
+You can copy the session link for sharing by clicking "Copy session link" button on top. 
+
+## Mapping your midi controller
+
+You'll need to select which know in your controller controls which parameter. 
+Synth-specific defaults presets are planned for Vital, Arturia, and Serum.
+
+You can save parameter set as a snapshot to use later on, or just restore after getting lost in the sonic oblibion.
+
+### Midi mapping (Purplederp theme)
+
+![midi mapping](https://github.com/janiluuk/meshroom/blob/main/midi_mapping.png)
+
+
+### Groove Library (Purplederp theme)
+
+Use your own grooves or some pre-selected ones to start off the jam if you prefer;
+
+![groove library](https://github.com/janiluuk/meshroom/blob/main/groove_library.png)
+
+**Alternatively, you can toggle metronome from the session controls (will not be recorded)**
+
+
+# Installation
+
+For time being the installation requires some commandline work and has been tested only in Linux. 
+Once the testing concludes, proper installer for all platforms will be provided.
 
 ## Prereqs
 
@@ -52,29 +91,29 @@ cp apps/web/.env.example apps/web/.env
 cp apps/sync-bridge/.env.example apps/sync-bridge/.env
 ```
 
-3) Start infra (from `/infra`)
+3) Start both services 
 
+infra (from `/infra`):
 ```bash
 cd infra
 docker compose up -d
 cd ..
 ```
-
-Or use `pnpm infra:up` from the repo root.
-
-4) Start apps
+apps:
 
 ```bash
 pnpm dev
 ```
 
-5) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
+Or use `pnpm infra:up` from the repo root.
+
+4) (Optional) Start Ableton Link sync bridge (for LINK_LAN / LINK_WAN modes)
 
 ```bash
 pnpm dev:sync
 ```
 
-6) Open the web app, sign in, create a session, then join twice (master + peer)
+5) Open the web app, sign in, create a session, then join twice (master + peer)
 
 - Web: http://localhost:3000
 - API: http://localhost:4000
@@ -83,15 +122,17 @@ pnpm dev:sync
 - LiveKit: ws://localhost:7880
 - MinIO: http://localhost:9000 (console http://localhost:9001)
 
-7) Start recording, stop, open playback
+6) Start recording, stop, open playback
 
 - Use the master controls to start and stop a recording
 - Click the playback link to open the aligned session view
 
-8) Start Program Out and ingest in OBS
+7) Start Program Out and ingest in OBS
 
 - Start Program Out in the master UI
 - In OBS, add a Media Source or FFmpeg Source using `PROGRAM_OUT_RTMP_URL`
+
+8) once all tracks are in, export the results (master + individual channels)
 
 ## API endpoints
 
