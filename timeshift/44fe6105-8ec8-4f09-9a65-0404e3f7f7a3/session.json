@@ -1,0 +1,61 @@
+{
+  "sessionId": "44fe6105-8ec8-4f09-9a65-0404e3f7f7a3",
+  "room": "room-a",
+  "syncMode": "LINK_LAN",
+  "syncTimeline": [
+    {
+      "at": "2024-01-01T00:00:00.000Z",
+      "mode": "LINK_LAN"
+    }
+  ],
+  "startedAt": "2024-01-01T00:00:00.000Z",
+  "participants": [
+    {
+      "identity": "alice"
+    },
+    {
+      "identity": "bob"
+    }
+  ],
+  "tracks": [
+    {
+      "participantIdentity": "alice",
+      "kind": "audio",
+      "trackId": "audio-1",
+      "channel": "MUSIC_IN",
+      "url": "http://minio:9000/recordings/sessions/44fe6105-8ec8-4f09-9a65-0404e3f7f7a3/alice/music_in-audio-1.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.000Z",
+      "reconnects": [],
+      "startOffsetMs": 0
+    },
+    {
+      "participantIdentity": "alice",
+      "kind": "audio",
+      "trackId": "audio-3",
+      "channel": "VOICE",
+      "url": "http://minio:9000/recordings/sessions/44fe6105-8ec8-4f09-9a65-0404e3f7f7a3/alice/voice-audio-3.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.000Z",
+      "reconnects": [],
+      "startOffsetMs": 0
+    },
+    {
+      "participantIdentity": "bob",
+      "kind": "audio",
+      "trackId": "audio-2",
+      "channel": "VOICE",
+      "url": "http://minio:9000/recordings/sessions/44fe6105-8ec8-4f09-9a65-0404e3f7f7a3/bob/voice-audio-2.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.000Z",
+      "reconnects": [],
+      "startOffsetMs": 0
+    }
+  ],
+  "loops": [],
+  "roomMixLoops": [],
+  "overdubs": []
+}
