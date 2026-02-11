@@ -29,10 +29,6 @@ Early docker based development version, more accessible installer in plans once 
 
 **Tested on Ableton 12.1, Touchable, Midikey Air (bluetooth connection), Arturia Minilab 3 (browser), APC Mini 2 (usb)**
 
-## Main screens. (Mellowyellow theme)
-
-![main_screens](https://github.com/janiluuk/meshroom/blob/main/screenshots_1.png)
-
 ### Session creation (Mellowyellow theme)
 
 Note that Ableton Link works on local network, so you'll need to use the included utility to get it enabled. It is super accurate, but limits the DAW to Ableton and is not officially supported method.
