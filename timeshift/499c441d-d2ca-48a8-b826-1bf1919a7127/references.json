@@ -1,0 +1,35 @@
+{
+  "tracks": [
+    {
+      "participantIdentity": "alice",
+      "trackId": "audio-1",
+      "channel": "MUSIC_IN",
+      "url": "http://minio:9000/recordings/sessions/499c441d-d2ca-48a8-b826-1bf1919a7127/alice/music_in-audio-1.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "participantIdentity": "alice",
+      "trackId": "audio-3",
+      "channel": "VOICE",
+      "url": "http://minio:9000/recordings/sessions/499c441d-d2ca-48a8-b826-1bf1919a7127/alice/voice-audio-3.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "participantIdentity": "bob",
+      "trackId": "audio-2",
+      "channel": "VOICE",
+      "url": "http://minio:9000/recordings/sessions/499c441d-d2ca-48a8-b826-1bf1919a7127/bob/voice-audio-2.mp4",
+      "container": "mp4",
+      "codec": "aac",
+      "startedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "loops": [],
+  "roomMixLoops": [],
+  "overdubs": [],
+  "masterMixUrl": null
+}
