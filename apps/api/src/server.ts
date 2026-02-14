@@ -46,7 +46,7 @@ type EgressClientLike = {
 };
 
 type S3ClientLike = {
-  send: (command: unknown) => Promise<any>;
+  send: (command: unknown) => Promise<unknown>;
 };
 
 type ServerDeps = {
@@ -273,7 +273,7 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
     });
 
     reply.send({
-      token: token.toJwt(),
+      token: await token.toJwt(),
       room: session.roomName,
       identity: user.id,
       role,
@@ -320,7 +320,7 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
     });
 
     reply.send({
-      token: token.toJwt(),
+      token: await token.toJwt(),
       room,
       identity: user.id,
       role,
@@ -584,7 +584,7 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
         return;
       }
       const rooms = await roomService.listRooms();
-      const found = Array.isArray(rooms) ? rooms.find((item: any) => item.name === room) : null;
+      const found = Array.isArray(rooms) ? rooms.find((item) => item.name === room) : null;
       if (!found) {
         reply.code(404).send({ error: "room not found" });
         return;

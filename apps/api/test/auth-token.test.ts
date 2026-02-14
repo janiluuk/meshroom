@@ -71,7 +71,7 @@ describe("/auth/token", () => {
     const decoded = JSON.parse(decodeBase64Url(payload));
     expect(decoded.sub).toBe(user.id);
     expect(decoded.name).toBe("Alice");
-    expect(decoded.grants.room).toBe("room-a");
-    expect(decoded.grants.roomJoin).toBe(true);
+    expect(decoded.video.room).toBe("room-a");
+    expect(decoded.video.roomJoin).toBe(true);
   });
 });

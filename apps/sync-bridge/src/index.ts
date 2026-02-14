@@ -79,9 +79,17 @@ const safeNumber = (value: unknown, fallback: number) => {
 
 const toJson = (value: unknown) => JSON.stringify(value);
 
-const readNumber = (target: any, keys: string[]): number | undefined => {
+const hasCreateFactory = (value: unknown): value is { create: () => unknown } =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { create?: unknown }).create === "function";
+
+const readNumber = (target: unknown, keys: string[]): number | undefined => {
+  if (!target || typeof target !== "object") {
+    return undefined;
+  }
   for (const key of keys) {
-    const value = target?.[key];
+    const value = (target as Record<string, unknown>)[key];
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
     }
@@ -151,8 +159,8 @@ const createAbletonLinkAdapter = async (): Promise<LinkAdapter> => {
     const link =
       typeof LinkCtor === "function"
         ? new LinkCtor()
-        : typeof (LinkCtor as any)?.create === "function"
-          ? (LinkCtor as any).create()
+        : hasCreateFactory(LinkCtor)
+          ? LinkCtor.create()
           : LinkCtor;
 
     if (link && typeof link.start === "function") {
