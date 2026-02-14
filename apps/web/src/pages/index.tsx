@@ -5,7 +5,6 @@ import {
   Room,
   RoomEvent,
   type Participant,
-  type RemoteParticipant,
   type TrackPublication
 } from "livekit-client";
 
@@ -54,33 +53,25 @@ type ParticipantMeta = {
   };
 };
 
-type MidiMessageEvent = {
-  data: Uint8Array;
-};
-
-type MidiInput = {
-  id: string;
-  name?: string | null;
-  onmidimessage: ((event: MidiMessageEvent) => void) | null;
-};
-
-type MidiOutput = {
-  id: string;
-  name?: string | null;
-  send: (data: number[] | Uint8Array) => void;
-};
-
-type MidiAccess = {
-  inputs: Map<string, MidiInput>;
-  outputs: Map<string, MidiOutput>;
-  onstatechange: ((event: Event) => void) | null;
-};
+type MidiInput = MIDIInput;
+type MidiOutput = MIDIOutput;
+type MidiAccess = MIDIAccess;
 
 type ParticipantStats = {
   rttMs?: number;
   jitterMs?: number;
   packetLossPct?: number;
   path?: "p2p" | "relay" | "unknown";
+};
+
+type ParticipantWithTracks = Participant & {
+  videoTrackPublications?: Map<string, TrackPublication>;
+  audioTrackPublications?: Map<string, TrackPublication>;
+  sid?: string;
+};
+
+type RoomWithStats = Room & {
+  getStats?: () => Promise<unknown>;
 };
 
 type SessionResponse = {
@@ -167,6 +158,9 @@ const formatPercent = (value?: number) => {
   }
   return `${value.toFixed(1)}%`;
 };
+
+const formatConnectionQuality = (quality: ConnectionQuality) =>
+  `${quality.charAt(0).toUpperCase()}${quality.slice(1)}`;
 
 const getLatencyBadge = (
   rttMs?: number,
@@ -430,16 +424,17 @@ const ParticipantTile = ({
 }: ParticipantTileProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const participantWithTracks = participant as ParticipantWithTracks;
 
   const videoPublication = useMemo(() => {
-    const publications = (participant as any).videoTrackPublications?.values?.() ?? [];
+    const publications = participantWithTracks.videoTrackPublications?.values?.() ?? [];
     return pickFirstPublication(publications);
-  }, [participant, version]);
+  }, [participantWithTracks, version]);
 
   const audioPublication = useMemo(() => {
-    const publications = (participant as any).audioTrackPublications?.values?.() ?? [];
+    const publications = participantWithTracks.audioTrackPublications?.values?.() ?? [];
     return pickFirstPublication(publications);
-  }, [participant, version]);
+  }, [participantWithTracks, version]);
 
   const videoTrack = videoPublication?.track;
   const audioTrack = audioPublication?.track;
@@ -533,7 +528,7 @@ const ParticipantTile = ({
           <div className="metric-grid">
             <div className="metric">
               <span>Connection</span>
-              <strong>{ConnectionQuality[connectionQuality]}</strong>
+              <strong>{formatConnectionQuality(connectionQuality)}</strong>
             </div>
             <div className="metric">
               <span>RTT</span>
@@ -993,8 +988,8 @@ const HomePage = () => {
     const input = midiInputs.find((device) => device.id === selectedMidiInputId);
     const output = midiOutputs.find((device) => device.id === selectedMidiOutputId);
     return {
-      input: input?.name,
-      output: output?.name
+      input: input?.name ?? undefined,
+      output: output?.name ?? undefined
     };
   }, [midiInputs, midiOutputs, selectedMidiInputId, selectedMidiOutputId]);
 
@@ -1125,8 +1120,10 @@ const HomePage = () => {
       return;
     }
     setLastMidiMessage(null);
-    const handleMessage = (event: MidiMessageEvent) => {
-      setLastMidiMessage(formatMidiData(event.data));
+    const handleMessage = (event: MIDIMessageEvent) => {
+      if (event.data) {
+        setLastMidiMessage(formatMidiData(event.data));
+      }
     };
     input.onmidimessage = handleMessage;
     return () => {
@@ -1532,7 +1529,7 @@ const HomePage = () => {
     room.on(RoomEvent.ConnectionStateChanged, handleConnectionChange);
 
     const statsInterval = window.setInterval(async () => {
-      const getStats = (room as any).getStats?.bind(room);
+      const getStats = (room as RoomWithStats).getStats?.bind(room);
       if (!getStats) {
         return;
       }
@@ -2202,12 +2199,10 @@ const HomePage = () => {
                 : "connected"
               : connectionState === "reconnecting"
                 ? "reconnecting"
-                : (participant as RemoteParticipant).isConnected
-                  ? "connected"
-                  : "disconnected";
+                : "connected";
             return (
               <ParticipantTile
-                key={participant.identity ?? (participant as any).sid ?? index}
+                key={participant.identity ?? `participant-${index}`}
                 participant={participant}
                 isLocal={isLocal}
                 connectionState={tileConnectionState}

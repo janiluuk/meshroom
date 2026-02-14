@@ -40,7 +40,7 @@ describe("recording start", () => {
       ]
     };
     const egressClient = {
-      startTrackEgress: async (_room: string, trackId: string, _output: unknown) => {
+      startTrackEgress: async (_room: string, trackId: string) => {
         startedTracks.push(trackId);
         return { egressId: `egress-${trackId}` };
       },

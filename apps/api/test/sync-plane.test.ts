@@ -4,15 +4,21 @@ import { buildServer } from "../src/server";
 import { loadConfig } from "../src/config";
 import { createStore } from "../src/store";
 
-const waitForMessage = (socket: WebSocket, predicate: (data: any) => boolean) => {
-  return new Promise<any>((resolve, reject) => {
+const waitForMessage = (
+  socket: WebSocket,
+  predicate: (data: Record<string, unknown>) => boolean
+) => {
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("timeout waiting for message"));
     }, 2000);
 
     socket.on("message", (data) => {
       try {
-        const parsed = JSON.parse(data.toString());
+        const parsed = JSON.parse(data.toString()) as unknown;
+        if (!parsed || typeof parsed !== "object") {
+          return;
+        }
         if (predicate(parsed)) {
           clearTimeout(timeout);
           resolve(parsed);
