@@ -268,6 +268,28 @@ pnpm dev:sync
 Set `NEXT_PUBLIC_LINK_PROXY_URL` in `apps/web/.env` if you want a custom host/port. LINK_WAN uses `API_SYNC_URL` and `MASTER_KEY` from `apps/sync-bridge/.env`.
 If the Ableton Link native module is not available, the sync bridge falls back to a local clock and logs a warning.
 
+### Max4Live device (quick start)
+
+1) Start the sync bridge:
+
+```bash
+pnpm dev:sync
+```
+
+2) In Ableton Live + Max for Live, open:
+
+`apps/sync-bridge/m4l/RemoteDJ-OSC-Stub.maxpat`
+
+3) In the Max patch, click the example message boxes to send test events:
+- `/remote-dj/preset "Neon Keys"`
+- `/remote-dj/param/set "filter_cutoff" 0.72`
+
+4) Keep the patch sending to `127.0.0.1:9123` (default bridge OSC listener).
+
+5) For custom host/port, set `DAW_BRIDGE_OSC_HOST` and `DAW_BRIDGE_OSC_PORT` in `apps/sync-bridge/.env`.
+
+For the full stub notes, see `apps/sync-bridge/m4l/README.md`.
+
 ## Notes
 
 - LiveKit config is in `infra/config/livekit.yaml`.
