@@ -71,7 +71,8 @@ main {
   box-shadow: 0 10px 20px var(--shadow);
 }
 
-.sync-panel {
+.sync-panel,
+.groove-panel {
   margin-bottom: 2rem;
   padding: 1.4rem 1.6rem;
   border-radius: 1.2rem;
@@ -555,6 +556,11 @@ button:not(:disabled):hover {
   border-radius: 999px;
   background: var(--bg-accent);
   color: var(--muted);
+}
+
+.status-pill.active-pill {
+  background: var(--accent);
+  color: #fff;
 }
 
 .tile-body {
