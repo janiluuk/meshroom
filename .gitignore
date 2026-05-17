@@ -1,7 +1,6 @@
 .data/
 .tmp/
 apps/api/test/fixtures/.tmp-daw-projects.json
-apps/api/test/fixtures/timeshift-runs/
 apps/api/test/fixtures/.tmp-timeshift/
 e2e/test-results/
 e2e/playwright-report/
