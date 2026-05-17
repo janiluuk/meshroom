@@ -53,7 +53,7 @@ Legend: **done** · **partial** · **missing** · **stub**
 | Vital / Arturia / Serum default maps | planned | missing | README line 48 |
 | OSC listener (`127.0.0.1:9123`) | ✓ | missing | Documented in README/M4L README; not in sync-bridge |
 | Local MIDI bridge to Ableton | — | missing | Help text: “until a local bridge ships” |
-| **Ableton project hosting & analysis** | — | missing | **See [Phase 3](#phase-3-ableton-project-hosting)** |
+| **DAW project management (Ableton + FL)** | — | missing | **[roadmap-daw-projects.md](./roadmap-daw-projects.md)** |
 
 ### Recording, export & playback
 
@@ -107,44 +107,18 @@ Legend: **done** · **partial** · **missing** · **stub**
 - Program Out SRT option
 - Groove library: upload user loops; richer generation (samples/ML); optional Every Noise playlist links
 
-### Phase 3 — Ableton project hosting
+### Phase 3 — DAW project management (Ableton + FL Studio)
 
-**Goal:** Let a session host upload an Ableton Live Set (`.als`) so collaborators see project structure before and during a jam—plugins in use, track list, and a color-coded timeline aligned with Live’s track colors.
+Host and analyze **Ableton Live** (`.als`) and **FL Studio** (`.flp`) projects: plugin inventory, tracks/channels, color-coded timelines, revisions, and session binding.
 
-#### User-facing
+**Full plan (phases A–D, API, schema, tickets):** [roadmap-daw-projects.md](./roadmap-daw-projects.md)
 
-- Upload `.als` (and optionally linked `.alc` / sample references as metadata-only) to a session or user library
-- Project overview page:
-  - **Tracks** — name, type (audio/MIDI/group/return), mute/solo/arm flags, color swatch
-  - **Plugins** — device/plugin names per track (VST/AU/Max/M4L, native Live devices)
-  - **Timeline** — horizontal lanes per track using Ableton’s color index (0–69 → palette), with clip blocks where parseable (name, length, start in bars/beats)
-- Versioning: re-upload creates a new revision; link to timeshift snapshot when both exist
-- Permission: host-only upload; read-only for guests
-
-#### Technical approach
-
-| Piece | Approach |
-|-------|----------|
-| Storage | MinIO bucket `projects/{sessionId}/{revision}/` — store original `.als` + derived `manifest.json` |
-| Parse | `.als` is gzip-compressed XML; unzip → parse Live Set XML (`Ableton` root, `LiveSet` → `Tracks`, `Devices`, clip slots) |
-| Plugin list | Walk device chains per track; collect `PluginDesc` / `AuPluginInfo` / `VstPluginInfo` / M4L device names; dedupe for “required plugins” summary |
-| Track colors | Map Live `Color Index` (and RGB when present) to shared palette in web UI |
-| Timeline | For each `MidiClip` / `AudioClip` (or arrangement clips): `CurrentStart`, `CurrentEnd`, name, color; render as blocks on a bar/beat axis using set tempo/time signature |
-| API | `POST /sessions/:id/project` (upload), `GET /sessions/:id/project`, `GET /sessions/:id/project/analysis` |
-| Limits | Max file size, virus scan hook optional, reject encrypted sets if unsupported |
-
-#### Out of scope (initial)
-
-- Opening or editing the project inside the browser
-- Resolving missing third-party plugins or auto-installing
-- Full sample/media binary hosting (metadata paths only in v1)
-- Non-Ableton DAW project formats (may follow same pattern later)
-
-#### Dependencies
-
-- Phase 1 session/host model stable
-- MinIO already in stack
-- Optional: tie project revision to timeshift commit on upload
+| Phase | Summary |
+|-------|---------|
+| **A** | Ableton parser + overview UI + session bind |
+| **B** | FL parser (PyFLP worker) + parity UI |
+| **C** | Project library, revision diff, timeshift linkage |
+| **D** | Export checklist, E2E, collaboration polish |
 
 ### Phase 4 — Distribution & scale
 
@@ -174,7 +148,8 @@ Legend: **done** · **partial** · **missing** · **stub**
 | P2 | Visual regression: home + playback vs `docs/app-views/` | Playwright screenshot | Desktop + mobile viewports |
 | P3 | Multi-participant mixer / loop controls | Playwright | When UI ships |
 | P3 | Timeshift snapshot + restore in session | Playwright | When API wired |
-| P3 | Ableton `.als` upload → track/plugin/timeline view | Playwright | When Phase 3 ships |
+| P3 | Ableton `.als` upload → track/plugin/timeline view | Playwright | [roadmap-daw-projects.md](./roadmap-daw-projects.md) Phase A |
+| P3 | FL Studio `.flp` upload → playlist/channel view | Playwright | Phase B |
 | P3 | Full `pnpm smoke` in CI (docker-compose on runner) | GitHub Actions service containers | Slow; nightly job |
 
 **Suggested layout:** `e2e/` package with Playwright, `playwright.config.ts`, fixtures for auth token + `MASTER_KEY`, `globalSetup` to run smoke or reuse running stack.
@@ -198,12 +173,13 @@ Legend: **done** · **partial** · **missing** · **stub**
 | MIDI CH 2–5 / Omnichannel | partial |
 | Export + processing | partial / missing |
 | Timeshift (git) | partial |
-| **Host & analyze Ableton projects** | **missing (Phase 3)** |
+| **DAW project management (Ableton + FL)** | **missing ([roadmap](./roadmap-daw-projects.md))** |
 
 ---
 
 ## Related docs
 
+- [roadmap-daw-projects.md](./roadmap-daw-projects.md) — Ableton + FL Studio project management (PM roadmap)
 - [README.md](../README.md) — product description and runbook
 - [AGENTS.md](../AGENTS.md) — build constraints for agents
 - [test-and-screenshot-report.md](./test-and-screenshot-report.md) — latest test/screenshot status
