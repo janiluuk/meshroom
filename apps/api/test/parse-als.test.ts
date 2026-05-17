@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gunzipSync, gzipSync } from "zlib";
+import { gzipSync } from "zlib";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

@@ -4,7 +4,6 @@ import path from "path";
 import type {
   DawKind,
   DawProjectSummary,
-  ParseJobStatus,
   SessionProjectBinding,
   StoredDawProject,
   StoredDawRevision
