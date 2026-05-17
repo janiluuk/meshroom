@@ -51,7 +51,7 @@ describe("recording start", () => {
       send: async () => ({})
     };
 
-    const server = buildServer(config, {
+    const server = await buildServer(config, {
       store: createStore({ filePath: "memory", persist: false }),
       roomService,
       egressClient,

@@ -13,7 +13,9 @@
     "infra:logs": "cd infra && docker compose logs -f",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
-    "smoke": "bash scripts/smoke.sh"
+    "smoke": "bash scripts/smoke.sh",
+    "test:e2e": "npm run test --prefix e2e",
+    "test:e2e:api": "npm run test:api --prefix e2e"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.11.0",

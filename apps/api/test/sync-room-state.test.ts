@@ -23,15 +23,15 @@ const waitForMessage = (
           clearTimeout(timeout);
           resolve(parsed);
         }
-      } catch (error) {
+      } catch {
         // ignore
       }
     });
   });
 };
 
-describe("sync plane", () => {
-  it("broadcasts master tempo and transport to peers", async () => {
+describe("sync plane roomState", () => {
+  it("broadcasts mixer and loop state to peers", async () => {
     const config = loadConfig({
       LIVEKIT_URL: "ws://livekit:7880",
       LIVEKIT_API_URL: "http://livekit:7880",
@@ -57,8 +57,7 @@ describe("sync plane", () => {
         stopEgress: async () => ({ ok: true }),
         startRoomCompositeEgress: async () => ({ egressId: "program" })
       },
-      s3Client: { send: async () => ({}) },
-      now: () => new Date("2024-01-01T00:00:00.000Z")
+      s3Client: { send: async () => ({}) }
     });
 
     await server.listen({ port: 0, host: "127.0.0.1" });
@@ -77,7 +76,7 @@ describe("sync plane", () => {
     master.send(
       JSON.stringify({
         type: "join",
-        room: "studio-1",
+        room: "studio-2",
         role: "master",
         masterKey: "master-key"
       })
@@ -85,7 +84,7 @@ describe("sync plane", () => {
     peer.send(
       JSON.stringify({
         type: "join",
-        room: "studio-1",
+        room: "studio-2",
         role: "peer"
       })
     );
@@ -95,15 +94,25 @@ describe("sync plane", () => {
 
     master.send(
       JSON.stringify({
-        type: "state",
-        tempo: 128,
-        transport: "playing"
+        type: "roomState",
+        mixer: [
+          {
+            identity: "alice",
+            channel: 1,
+            gain: 0.8,
+            pan: -0.2,
+            mute: false
+          }
+        ],
+        participantLoops: { alice: true },
+        sessionLoop: true
       })
     );
 
-    const message = await waitForMessage(peer, (data) => data.type === "state");
-    expect(message.tempo).toBe(128);
-    expect(message.transport).toBe("playing");
+    const message = await waitForMessage(peer, (data) => data.type === "roomState");
+    expect(message.sessionLoop).toBe(true);
+    expect((message.participantLoops as Record<string, boolean>).alice).toBe(true);
+    expect((message.mixer as Array<{ gain: number }>)[0].gain).toBe(0.8);
 
     master.close();
     peer.close();

@@ -5,6 +5,12 @@ import {
   GenreLoopPlayer,
   type GenreLoopProfile
 } from "../lib/genreLoop";
+import { DawProjectPanel } from "../components/DawProjectPanel";
+import { DawSessionChip } from "../components/DawSessionChip";
+import { SessionMixerPanel } from "../components/SessionMixerPanel";
+import { TimeshiftPanel } from "../components/TimeshiftPanel";
+import type { DawKind, SessionProjectInfo } from "../lib/dawTypes";
+import { defaultRoomSyncState, type RoomSyncState } from "../lib/sessionState";
 import {
   ConnectionQuality,
   Room,
@@ -29,6 +35,8 @@ type SessionListItem = {
   name: string;
   roomName: string;
   ownerId: string;
+  bpm?: number;
+  quantization?: number;
   createdAt: string;
   lastActiveAt: string;
   role: Role;
@@ -49,6 +57,7 @@ type MidiLabels = {
 type ParticipantMeta = {
   role?: Role;
   syncMode?: SyncMode;
+  daw?: DawKind;
   devices?: {
     cam?: string;
     mic?: string;
@@ -92,8 +101,17 @@ type SessionsResponse = {
   sessions: SessionListItem[];
 };
 
+type DawProjectListItem = {
+  id: string;
+  name: string;
+  daw: DawKind;
+  revisionCount?: number;
+  latestRevision?: { id: string; status: string; fileName: string } | null;
+};
+
 type SessionCreateResponse = {
   session: SessionListItem;
+  projectBinding?: unknown;
 };
 
 type JoinResponse = {
@@ -480,6 +498,7 @@ const ParticipantTile = ({
   const displayName = participant.name || participant.identity || "Guest";
   const metadata = parseParticipantMeta(participant.metadata);
   const roleBadge = metadata?.role || (isLocal ? "local" : "peer");
+  const dawBadge = metadata?.daw;
   const showAvatar = !videoTrack || videoPublication?.isMuted;
   const audioLevelValue = Math.min(Math.max(audioLevel ?? 0, 0), 1);
   const latencyBadge = getLatencyBadge(
@@ -532,6 +551,11 @@ const ParticipantTile = ({
           </div>
         </div>
         <div className="tile-sub">
+          {dawBadge ? (
+            <span className={`daw-badge daw-badge--${dawBadge}`} title={dawBadge === "ableton" ? "Ableton Live" : "FL Studio"}>
+              {dawBadge === "ableton" ? "AL" : "FL"}
+            </span>
+          ) : null}
           <span className="role-badge">{roleBadge}</span>
           <span className={latencyBadge.className}>{latencyBadge.label}</span>
           {isLocal ? <span className="status-pill">You</span> : null}
@@ -629,6 +653,17 @@ const HomePage = () => {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [sessionName, setSessionName] = useState("");
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionProjectInfo, setSessionProjectInfo] = useState<SessionProjectInfo | null>(null);
+  const [templateProjectId, setTemplateProjectId] = useState("");
+  const [templateRevisionId, setTemplateRevisionId] = useState("");
+  const [projectLibraryForTemplate, setProjectLibraryForTemplate] = useState<DawProjectListItem[]>([]);
+  const [templateRevisions, setTemplateRevisions] = useState<
+    Array<{ id: string; fileName: string; status: string }>
+  >([]);
+  const [createSessionBpm, setCreateSessionBpm] = useState("120");
+  const [createSessionQuantization, setCreateSessionQuantization] = useState("4");
+  const [roomSyncState, setRoomSyncState] = useState<RoomSyncState>(defaultRoomSyncState);
+  const [copyLinkStatus, setCopyLinkStatus] = useState<string | null>(null);
   const [micEnabled, setMicEnabled] = useState(true);
   const [camEnabled, setCamEnabled] = useState(true);
 
@@ -807,6 +842,38 @@ const HomePage = () => {
     }
   }, []);
 
+  const broadcastRoomState = useCallback(
+    (state: RoomSyncState) => {
+      const socket = syncSocketRef.current;
+      if (socket && socket.readyState === WebSocket.OPEN && role === "master") {
+        socket.send(
+          JSON.stringify({
+            type: "roomState",
+            mixer: state.mixer,
+            participantLoops: state.participantLoops,
+            sessionLoop: state.sessionLoop
+          })
+        );
+      }
+    },
+    [role]
+  );
+
+  const handleCopySessionLink = async () => {
+    if (!activeSessionId || typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("session", activeSessionId);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setCopyLinkStatus("Session link copied.");
+    } catch {
+      setCopyLinkStatus(url.toString());
+    }
+    window.setTimeout(() => setCopyLinkStatus(null), 3000);
+  };
+
   const handleCreateSession = async () => {
     if (!authToken) {
       return;
@@ -817,15 +884,32 @@ const HomePage = () => {
       return;
     }
     try {
+      const payload: {
+        name: string;
+        bpm?: number;
+        quantization?: number;
+        projectId?: string;
+        revisionId?: string;
+      } = {
+        name: sessionName,
+        bpm: Number(createSessionBpm),
+        quantization: Number(createSessionQuantization)
+      };
+      if (templateProjectId && templateRevisionId) {
+        payload.projectId = templateProjectId;
+        payload.revisionId = templateRevisionId;
+      }
       const response = await fetchJson<SessionCreateResponse>(
         `${apiBaseUrl}/sessions`,
         {
           method: "POST",
-          body: JSON.stringify({ name: sessionName })
+          body: JSON.stringify(payload)
         },
         authToken
       );
       setSessionName("");
+      setTemplateProjectId("");
+      setTemplateRevisionId("");
       setSessions((current) => [response.session, ...current]);
       refreshSessions();
     } catch (error) {
@@ -884,6 +968,13 @@ const HomePage = () => {
       setRoomName(response.room);
       setActiveSessionId(response.session.id);
       setActiveSessionName(response.session.name);
+      if (response.session.bpm) {
+        setSyncTempo(response.session.bpm);
+      }
+      if (response.session.quantization) {
+        setSyncQuantum(response.session.quantization);
+      }
+      setRoomSyncState(defaultRoomSyncState());
       setRoom(newRoom);
       updateParticipants(newRoom);
       refreshSessions();
@@ -1083,6 +1174,7 @@ const HomePage = () => {
     const payload: ParticipantMeta = {
       role,
       syncMode,
+      daw: sessionProjectInfo?.daw,
       devices: {
         cam: deviceInfo.cam,
         mic: deviceInfo.mic,
@@ -1094,7 +1186,7 @@ const HomePage = () => {
     room.localParticipant
       .setMetadata(JSON.stringify(payload))
       .catch(() => undefined);
-  }, [room, role, syncMode, deviceInfo, localMidiLabels]);
+  }, [room, role, syncMode, deviceInfo, localMidiLabels, sessionProjectInfo]);
 
   useEffect(() => {
     if (typeof navigator === "undefined") {
@@ -1161,6 +1253,30 @@ const HomePage = () => {
     }
     refreshSessions();
   }, [currentUser, refreshSessions]);
+
+  useEffect(() => {
+    if (!authToken) {
+      setProjectLibraryForTemplate([]);
+      return;
+    }
+    fetchJson<{ projects: DawProjectListItem[] }>(`${apiBaseUrl}/projects`, undefined, authToken)
+      .then((response) => setProjectLibraryForTemplate(response.projects))
+      .catch(() => setProjectLibraryForTemplate([]));
+  }, [authToken, apiBaseUrl]);
+
+  useEffect(() => {
+    if (!authToken || !templateProjectId) {
+      setTemplateRevisions([]);
+      return;
+    }
+    fetchJson<{ revisions: Array<{ id: string; fileName: string; status: string }> }>(
+      `${apiBaseUrl}/projects/${templateProjectId}/revisions`,
+      undefined,
+      authToken
+    )
+      .then((response) => setTemplateRevisions(response.revisions))
+      .catch(() => setTemplateRevisions([]));
+  }, [authToken, apiBaseUrl, templateProjectId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1311,8 +1427,23 @@ const HomePage = () => {
           mode?: SyncMode;
           quantum?: number;
           sentAt?: number;
+          roomState?: RoomSyncState;
+          mixer?: RoomSyncState["mixer"];
+          participantLoops?: Record<string, boolean>;
+          sessionLoop?: boolean;
         };
-        if (message.type === "state") {
+        if (message.type === "joined") {
+          const joinedState = (message as { roomState?: RoomSyncState }).roomState;
+          if (joinedState) {
+            setRoomSyncState(joinedState);
+          }
+        } else if (message.type === "roomState") {
+          setRoomSyncState({
+            mixer: message.mixer ?? [],
+            participantLoops: message.participantLoops ?? {},
+            sessionLoop: Boolean(message.sessionLoop)
+          });
+        } else if (message.type === "state") {
           const allowUpdate =
             syncModeRef.current === "MIDI" || linkProxyStatusRef.current !== "connected";
           if (allowUpdate && typeof message.tempo === "number") {
@@ -1362,6 +1493,36 @@ const HomePage = () => {
       socket.close();
     };
   }, [room, roomName, role, masterKey]);
+
+  useEffect(() => {
+    if (!isConnected || role !== "master") {
+      return;
+    }
+    broadcastRoomState(roomSyncState);
+  }, [roomSyncState, isConnected, role, broadcastRoomState]);
+
+  const pendingJoinSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const sessionId = new URLSearchParams(window.location.search).get("session");
+    if (sessionId) {
+      pendingJoinSessionRef.current = sessionId;
+    }
+  }, []);
+
+  useEffect(() => {
+    const sessionId = pendingJoinSessionRef.current;
+    if (!sessionId || !authToken || !sessions.length || activeSessionId || isJoining) {
+      return;
+    }
+    const target = sessions.find((session) => session.id === sessionId);
+    if (target) {
+      pendingJoinSessionRef.current = null;
+      void joinSession(target);
+    }
+  }, [authToken, sessions, activeSessionId, isJoining]);
 
   useEffect(() => {
     if (!isConnected || syncMode === "MIDI") {
@@ -1732,7 +1893,12 @@ const HomePage = () => {
         headers: {
           "x-master-key": masterKey
         },
-        body: JSON.stringify({ room: roomName, syncMode })
+        body: JSON.stringify({
+          room: roomName,
+          syncMode,
+          meshroomSessionId: activeSessionId ?? undefined,
+          sessionId: activeSessionId ?? undefined
+        })
       });
       setRecordingSessionId(response.sessionId);
       setRecordingStatus("recording");
@@ -1847,7 +2013,27 @@ const HomePage = () => {
             <span>Program Out</span>
             <strong>{programStatus}</strong>
           </div>
+          {isConnected ? (
+            <>
+              <div className="status-block status-block--chip">
+                <span>DAW</span>
+                <DawSessionChip
+                  project={sessionProjectInfo}
+                  onOpen={() =>
+                    document.getElementById("daw-project-panel")?.scrollIntoView({ behavior: "smooth" })
+                  }
+                />
+              </div>
+              <div className="status-block">
+                <span>Invite</span>
+                <button type="button" className="ghost" onClick={() => handleCopySessionLink()}>
+                  Copy link
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>
+        {copyLinkStatus ? <div className="help-text">{copyLinkStatus}</div> : null}
         {isConnected ? (
           <>
           <div className="sync-panel">
@@ -2097,6 +2283,35 @@ const HomePage = () => {
             ) : null}
             {genreSearchError ? <div style={{ color: "var(--danger)" }}>{genreSearchError}</div> : null}
           </div>
+
+          {activeSessionId && authToken && room ? (
+            <>
+              <SessionMixerPanel
+                participants={participants.filter(
+                  (participant) => participant.identity !== room.localParticipant.identity
+                )}
+                localIdentity={room.localParticipant.identity}
+                roomState={roomSyncState}
+                isMaster={role === "master"}
+                onChange={(state) => {
+                  setRoomSyncState(state);
+                }}
+              />
+              <TimeshiftPanel
+                apiBaseUrl={apiBaseUrl}
+                authToken={authToken}
+                sessionId={activeSessionId}
+                isMaster={role === "master"}
+              />
+              <DawProjectPanel
+                apiBaseUrl={apiBaseUrl}
+                authToken={authToken}
+                sessionId={activeSessionId}
+                isMaster={role === "master"}
+                onSessionProjectChange={setSessionProjectInfo}
+              />
+            </>
+          ) : null}
           </>
         ) : null}
 
@@ -2168,6 +2383,65 @@ const HomePage = () => {
                   value={sessionName}
                   onChange={(event) => setSessionName(event.target.value)}
                 />
+              </div>
+              <div className="field">
+                <label htmlFor="session-bpm">BPM</label>
+                <input
+                  id="session-bpm"
+                  type="number"
+                  min={40}
+                  max={300}
+                  value={createSessionBpm}
+                  onChange={(event) => setCreateSessionBpm(event.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="session-quantization">Quantization</label>
+                <select
+                  id="session-quantization"
+                  value={createSessionQuantization}
+                  onChange={(event) => setCreateSessionQuantization(event.target.value)}
+                >
+                  <option value="4">4/4</option>
+                  <option value="8">8/8</option>
+                  <option value="16">16/16</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="session-project-template">Project template (optional)</label>
+                <select
+                  id="session-project-template"
+                  value={templateProjectId}
+                  onChange={(event) => {
+                    setTemplateProjectId(event.target.value);
+                    setTemplateRevisionId("");
+                  }}
+                >
+                  <option value="">None</option>
+                  {projectLibraryForTemplate.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name} ({project.daw})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="session-revision-template">Revision</label>
+                <select
+                  id="session-revision-template"
+                  value={templateRevisionId}
+                  onChange={(event) => setTemplateRevisionId(event.target.value)}
+                  disabled={!templateProjectId}
+                >
+                  <option value="">Select ready revision…</option>
+                  {templateRevisions
+                    .filter((revision) => revision.status === "ready")
+                    .map((revision) => (
+                      <option key={revision.id} value={revision.id}>
+                        {revision.fileName}
+                      </option>
+                    ))}
+                </select>
               </div>
               <button onClick={handleCreateSession}>Create session</button>
             </div>

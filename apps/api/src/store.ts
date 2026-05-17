@@ -14,6 +14,8 @@ export type StoredSession = {
   name: string;
   roomName: string;
   ownerId: string;
+  bpm: number;
+  quantization: number;
   createdAt: string;
   lastActiveAt: string;
 };
@@ -58,9 +60,15 @@ export type Store = {
   login: (displayName: string) => { user: StoredUser; token: string };
   getUserByToken: (token: string) => StoredUser | null;
   listSessionsForUser: (userId: string) => SessionSummary[];
-  createSession: (userId: string, name: string) => SessionSummary;
+  createSession: (
+    userId: string,
+    name: string,
+    options?: { bpm?: number; quantization?: number }
+  ) => SessionSummary;
   joinSession: (userId: string, sessionId: string, role: "master" | "peer") => SessionSummary | null;
   getSessionById: (sessionId: string) => StoredSession | null;
+  getMembership: (userId: string, sessionId: string) => StoredMembership | null;
+  isSessionOwner: (userId: string, sessionId: string) => boolean;
 };
 
 export type StoreOptions = {
@@ -141,6 +149,8 @@ export const createStore = ({ filePath, now = () => new Date(), persist = true }
     const memberCount = data.memberships.filter((entry) => entry.sessionId === session.id).length;
     return {
       ...session,
+      bpm: session.bpm ?? 120,
+      quantization: session.quantization ?? 4,
       role: membership.role,
       memberCount
     };
@@ -199,15 +209,25 @@ export const createStore = ({ filePath, now = () => new Date(), persist = true }
         .filter((value): value is SessionSummary => Boolean(value));
       return sessions.sort((a, b) => Date.parse(b.lastActiveAt) - Date.parse(a.lastActiveAt));
     },
-    createSession: (userId: string, name: string) => {
+    createSession: (userId: string, name: string, options?: { bpm?: number; quantization?: number }) => {
       const trimmed = name.trim();
       const timestamp = toIso(now());
       const id = randomUUID();
+      const bpm =
+        typeof options?.bpm === "number" && Number.isFinite(options.bpm)
+          ? Math.min(Math.max(Math.round(options.bpm), 40), 300)
+          : 120;
+      const quantization =
+        typeof options?.quantization === "number" && Number.isFinite(options.quantization)
+          ? Math.min(Math.max(Math.round(options.quantization), 1), 32)
+          : 4;
       const session: StoredSession = {
         id,
         name: trimmed,
         roomName: id,
         ownerId: userId,
+        bpm,
+        quantization,
         createdAt: timestamp,
         lastActiveAt: timestamp
       };
@@ -231,6 +251,17 @@ export const createStore = ({ filePath, now = () => new Date(), persist = true }
     },
     getSessionById: (sessionId: string) => {
       return data.sessions.find((entry) => entry.id === sessionId) ?? null;
+    },
+    getMembership: (userId: string, sessionId: string) => {
+      return (
+        data.memberships.find(
+          (entry) => entry.userId === userId && entry.sessionId === sessionId
+        ) ?? null
+      );
+    },
+    isSessionOwner: (userId: string, sessionId: string) => {
+      const session = data.sessions.find((entry) => entry.id === sessionId);
+      return Boolean(session && session.ownerId === userId);
     }
   };
 };

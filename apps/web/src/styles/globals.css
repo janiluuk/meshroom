@@ -563,6 +563,176 @@ button:not(:disabled):hover {
   color: #fff;
 }
 
+.daw-project-panel .daw-track-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.daw-project-panel .daw-track-list li {
+  padding: 0.6rem 0.8rem;
+  border-left: 4px solid var(--border);
+  background: var(--bg);
+  border-radius: 0.5rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.daw-project-panel .daw-track-list li span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.daw-timeline {
+  display: grid;
+  gap: 0.45rem;
+  overflow-x: auto;
+}
+
+.daw-timeline-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.daw-timeline-label {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daw-timeline-lane {
+  position: relative;
+  height: 1.4rem;
+  background: var(--bg);
+  border-radius: 0.35rem;
+  min-width: 480px;
+}
+
+.daw-timeline-clip {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 0.25rem;
+  opacity: 0.85;
+  min-width: 4px;
+}
+
+.daw-open-hints {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+}
+
+.daw-open-hints ol {
+  margin: 0.5rem 0 0.75rem 1.1rem;
+  padding: 0;
+}
+
+.daw-download-link {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+}
+
+.daw-session-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  background: var(--bg);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.daw-session-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.daw-session-chip--ableton .daw-session-chip-icon {
+  background: #ff764d;
+  color: #1a120f;
+}
+
+.daw-session-chip--flstudio .daw-session-chip-icon {
+  background: #f97316;
+  color: #1a120f;
+}
+
+.status-block--chip {
+  min-width: 12rem;
+}
+
+.daw-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.daw-badge--ableton {
+  background: #ff764d;
+  color: #1a120f;
+}
+
+.daw-badge--flstudio {
+  background: #f97316;
+  color: #1a120f;
+}
+
+.mixer-panel .mixer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.mixer-channel {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mixer-channel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.mixer-channel label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.timeshift-panel .daw-track-list li {
+  display: grid;
+  gap: 0.25rem;
+}
+
 .tile-body {
   padding: 0 1rem 1rem;
   display: grid;

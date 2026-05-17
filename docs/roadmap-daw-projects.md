@@ -2,7 +2,7 @@
 
 Product roadmap for hosting, analyzing, and managing **Ableton** (`.als`) and **FL Studio** (`.flp`) projects inside Meshroom sessions. Complements the live collaboration MVP ([ROADMAP.md](./ROADMAP.md)).
 
-**Status:** planning · **Last updated:** 2026-05-16
+**Status:** phases A–D implemented (API + session UI + E2E scaffold) · **Last updated:** 2026-05-17
 
 ---
 

@@ -20,6 +20,18 @@ import {
   pickRandomEveryNoiseGenre,
   searchEveryNoiseGenres
 } from "./everynoise.js";
+import { registerDawRoutes } from "./daw/register-routes.js";
+import { createProjectStore } from "./daw/project-store.js";
+import { createTimeshiftService } from "./timeshift.js";
+import { buildStemExportManifest } from "./export-stems.js";
+import {
+  clampGain,
+  clampPan,
+  defaultRoomSyncState,
+  type MixerChannelState,
+  type RoomSyncState
+} from "./session-state.js";
+import { inferAudioChannel } from "./manifest.js";
 import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 
@@ -91,12 +103,19 @@ type SyncStateMessage = {
   phase?: number;
 };
 
+type SyncRoomStateMessage = {
+  type: "roomState";
+  mixer?: MixerChannelState[];
+  participantLoops?: Record<string, boolean>;
+  sessionLoop?: boolean;
+};
+
 type SyncPingMessage = {
   type: "ping";
   sentAt: number;
 };
 
-type SyncMessage = SyncJoinMessage | SyncStateMessage | SyncPingMessage;
+type SyncMessage = SyncJoinMessage | SyncStateMessage | SyncRoomStateMessage | SyncPingMessage;
 
 const recordingContainer = "mp4";
 const recordingCodec = "aac";
@@ -126,7 +145,7 @@ const safePathPart = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, "_");
 
 const isAudioTrack = (kind: string) => kind === "audio";
 
-export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) => {
+export const buildServer = async (config: AppConfig, deps: Partial<ServerDeps> = {}) => {
   const server = Fastify({
     logger: true
   });
@@ -192,6 +211,32 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
     return undefined;
   };
 
+  const projectStore = createProjectStore({
+    filePath: config.daw.projectsStorePath,
+    now,
+    maxRevisionsPerProject: config.daw.maxRevisionsPerProject
+  });
+  const dawRoutes = await registerDawRoutes(server, config, {
+    store,
+    s3Client,
+    now,
+    projectStore
+  });
+
+  const timeshift = createTimeshiftService({
+    baseDir: config.daw.timeshiftDir,
+    startDir: process.cwd(),
+    logger: server.log
+  });
+
+  const canAccessMeshroomSession = (user: StoredUser, sessionId: string) =>
+    Boolean(store.getMembership(user.id, sessionId) || store.isSessionOwner(user.id, sessionId));
+
+  const canManageMeshroomSession = (user: StoredUser, sessionId: string) => {
+    const membership = store.getMembership(user.id, sessionId);
+    return membership?.role === "master" || store.isSessionOwner(user.id, sessionId);
+  };
+
   server.get("/", async () => ({
     name: "remote-dj-api",
     status: "ok"
@@ -253,14 +298,37 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
 
   server.post("/sessions", { preHandler: requireAuth }, async (request, reply) => {
     const user = (request as FastifyRequest & { user?: StoredUser }).user!;
-    const body = request.body as { name?: string };
+    const body = request.body as {
+      name?: string;
+      bpm?: number;
+      quantization?: number;
+      projectId?: string;
+      revisionId?: string;
+    };
     const name = body?.name?.trim();
     if (!name) {
       reply.code(400).send({ error: "name is required" });
       return;
     }
-    const session = store.createSession(user.id, name);
-    reply.send({ session });
+    const session = store.createSession(user.id, name, {
+      bpm: body?.bpm,
+      quantization: body?.quantization
+    });
+    const projectId = body?.projectId?.trim();
+    const revisionId = body?.revisionId?.trim();
+    let projectBinding = null;
+    if (projectId && revisionId) {
+      const bindResult = await dawRoutes.bindSessionProject(
+        session.id,
+        projectId,
+        revisionId,
+        user.id
+      );
+      if (!("error" in bindResult)) {
+        projectBinding = bindResult;
+      }
+    }
+    reply.send({ session, projectBinding });
   });
 
   server.post("/sessions/:id/join", { preHandler: requireAuth }, async (request, reply) => {
@@ -356,9 +424,18 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
     "/recording/start",
     { preHandler: requireMasterAuth },
     async (request, reply) => {
-      const body = request.body as { room?: string; syncMode?: SyncMode };
+      const body = request.body as {
+        room?: string;
+        syncMode?: SyncMode;
+        sessionId?: string;
+        meshroomSessionId?: string;
+      };
       const room = body?.room?.trim();
       const syncMode = body?.syncMode ?? "LINK_LAN";
+      const meshroomSession = body.meshroomSessionId?.trim()
+        ? store.getSessionById(body.meshroomSessionId.trim())
+        : null;
+      const sessionId = body.sessionId?.trim() || meshroomSession?.id || randomUUID();
 
       if (!room) {
         reply.code(400).send({ error: "room is required" });
@@ -383,7 +460,6 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
       server.log.info({ event: "recording_start", room }, "Starting recording session");
 
       const startedAt = now().toISOString();
-      const sessionId = randomUUID();
 
       const participants = await roomService.listParticipants(room);
       if (!participants.length) {
@@ -402,53 +478,64 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
         const identity = participant.identity ?? "unknown";
         const safeIdentity = safePathPart(identity);
         const trackInfos = participant.tracks ?? [];
-        const audioTrack = trackInfos.find((track) => isAudioTrack(normalizeTrackKind(track.type)));
-        const trackId = audioTrack?.sid?.trim();
+        const audioTracks = trackInfos.filter((track) =>
+          isAudioTrack(normalizeTrackKind(track.type))
+        );
 
-        if (!trackId) {
+        if (!audioTracks.length) {
           server.log.warn({ event: "recording_skip", identity }, "No audio track to record");
           continue;
         }
 
-        const fileKey = `sessions/${sessionId}/${safeIdentity}/audio.${recordingContainer}`;
-        const output = new EncodedFileOutput({
-          fileType: recordingFileType,
-          filepath: fileKey,
-          s3: new S3Upload({
-            accessKey: config.minio.accessKey,
-            secret: config.minio.secretKey,
-            region: config.minio.region,
-            bucket: config.minio.bucket,
-            endpoint: config.minio.endpoint,
-            forcePathStyle: config.minio.forcePathStyle
-          })
-        });
-
-        try {
-          // Track egress captures a single LiveKit audio track so each participant becomes its own stem.
-          // A room composite egress could be added here later for a master mix if needed.
-          const egressInfo = await egressClient.startTrackEgress(room, trackId, output);
-
-          if (!egressInfo.egressId) {
-            server.log.error({ event: "recording_egress_error", identity }, "Missing egressId");
+        const tracksToRecord = audioTracks.slice(0, 2);
+        for (let index = 0; index < tracksToRecord.length; index += 1) {
+          const audioTrack = tracksToRecord[index];
+          const trackId = audioTrack.sid?.trim();
+          if (!trackId) {
             continue;
           }
-
-          const trackStartedAt = now().toISOString();
-          trackManifests.push({
-            participantIdentity: identity,
-            participantName: participant.name ?? undefined,
-            kind: "audio",
-            url: buildTrackUrl(config.minio.publicUrl, config.minio.bucket, fileKey),
-            container: recordingContainer,
-            codec: recordingCodec,
-            startedAt: trackStartedAt,
-            reconnects: [],
-            egressId: egressInfo.egressId,
-            fileKey
+          const channel = inferAudioChannel(index, tracksToRecord.length);
+          const channelSlug = channel.toLowerCase().replace(/_/g, "-");
+          const fileKey = `sessions/${sessionId}/${safeIdentity}/${channelSlug}-${trackId}.${recordingContainer}`;
+          const output = new EncodedFileOutput({
+            fileType: recordingFileType,
+            filepath: fileKey,
+            s3: new S3Upload({
+              accessKey: config.minio.accessKey,
+              secret: config.minio.secretKey,
+              region: config.minio.region,
+              bucket: config.minio.bucket,
+              endpoint: config.minio.endpoint,
+              forcePathStyle: config.minio.forcePathStyle
+            })
           });
-        } catch (error) {
-          server.log.error({ error, identity }, "Failed to start track egress");
+
+          try {
+            const egressInfo = await egressClient.startTrackEgress(room, trackId, output);
+
+            if (!egressInfo.egressId) {
+              server.log.error({ event: "recording_egress_error", identity }, "Missing egressId");
+              continue;
+            }
+
+            const trackStartedAt = now().toISOString();
+            trackManifests.push({
+              participantIdentity: identity,
+              participantName: participant.name ?? undefined,
+              kind: "audio",
+              trackId,
+              channel,
+              url: buildTrackUrl(config.minio.publicUrl, config.minio.bucket, fileKey),
+              container: recordingContainer,
+              codec: recordingCodec,
+              startedAt: trackStartedAt,
+              reconnects: [],
+              egressId: egressInfo.egressId,
+              fileKey
+            });
+          } catch (error) {
+            server.log.error({ error, identity, channel }, "Failed to start track egress");
+          }
         }
       }
 
@@ -461,9 +548,15 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
         sessionId,
         room,
         syncMode,
+        syncTimeline: [{ at: startedAt, mode: syncMode, tempo: meshroomSession?.bpm }],
         startedAt,
+        bpm: meshroomSession?.bpm,
+        quantization: meshroomSession?.quantization,
         participants: participantManifests,
-        tracks: trackManifests
+        tracks: trackManifests,
+        loops: [],
+        roomMixLoops: [],
+        overdubs: []
       };
 
       activeSessions.set(sessionId, manifest);
@@ -504,6 +597,22 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
       }
 
       manifest.endedAt = endedAt;
+      manifest.syncTimeline = [
+        ...(manifest.syncTimeline ?? []),
+        { at: endedAt, mode: manifest.syncMode, tempo: manifest.bpm }
+      ];
+
+      const binding = dawRoutes.projectStore.getSessionBinding(sessionId);
+      if (binding) {
+        const project = dawRoutes.projectStore.getProject(binding.projectId);
+        const revision = dawRoutes.projectStore.getRevision(binding.revisionId);
+        if (project && revision) {
+          manifest.projectId = binding.projectId;
+          manifest.projectRevisionId = binding.revisionId;
+          manifest.daw = project.daw;
+          manifest.projectName = project.name;
+        }
+      }
 
       const manifestKey = `sessions/${sessionId}/session.json`;
       const storedManifest = toManifest(manifest);
@@ -519,7 +628,121 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
 
       activeSessions.delete(sessionId);
 
+      if (timeshift.enabled) {
+        try {
+          await timeshift.snapshotSession(sessionId, "recording stop", { manifest: storedManifest });
+        } catch (error) {
+          server.log.warn({ error, sessionId }, "Timeshift snapshot failed");
+        }
+      }
+
       reply.send(storedManifest);
+    }
+  );
+
+  server.get(
+    "/sessions/:id/timeshift/snapshots",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+      const sessionId = (request.params as { id: string }).id;
+      if (!canAccessMeshroomSession(user, sessionId)) {
+        reply.code(403).send({ error: "forbidden" });
+        return;
+      }
+      if (!timeshift.enabled) {
+        reply.send({ enabled: false, snapshots: [] });
+        return;
+      }
+      const snapshots = await timeshift.listSnapshots(sessionId);
+      reply.send({ enabled: true, snapshots });
+    }
+  );
+
+  server.post(
+    "/sessions/:id/timeshift/snapshots",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+      const sessionId = (request.params as { id: string }).id;
+      if (!canManageMeshroomSession(user, sessionId)) {
+        reply.code(403).send({ error: "master role required" });
+        return;
+      }
+      if (!timeshift.enabled) {
+        reply.code(503).send({ error: "timeshift not available" });
+        return;
+      }
+      const body = request.body as {
+        message?: string;
+        state?: Record<string, unknown>;
+        manifest?: SessionManifest;
+      };
+      const message = body?.message?.trim() || "manual snapshot";
+      const manifest = body?.manifest ?? timeshift.readManifest(sessionId);
+      const result = await timeshift.snapshotSession(sessionId, message, {
+        manifest,
+        state: body?.state ?? null
+      });
+      reply.send(result);
+    }
+  );
+
+  server.post(
+    "/sessions/:id/timeshift/restore",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+      const sessionId = (request.params as { id: string }).id;
+      if (!canManageMeshroomSession(user, sessionId)) {
+        reply.code(403).send({ error: "master role required" });
+        return;
+      }
+      if (!timeshift.enabled) {
+        reply.code(503).send({ error: "timeshift not available" });
+        return;
+      }
+      const body = request.body as { commitId?: string };
+      const commitId = body?.commitId?.trim();
+      if (!commitId) {
+        reply.code(400).send({ error: "commitId is required" });
+        return;
+      }
+      const result = await timeshift.restoreSnapshot(sessionId, commitId);
+      reply.send({ ok: true, ...result, manifest: timeshift.readManifest(sessionId) });
+    }
+  );
+
+  server.get(
+    "/sessions/:id/export",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = (request as FastifyRequest & { user?: StoredUser }).user!;
+      const sessionId = (request.params as { id: string }).id;
+      if (!canAccessMeshroomSession(user, sessionId)) {
+        reply.code(403).send({ error: "forbidden" });
+        return;
+      }
+
+      let manifest: SessionManifest | null = timeshift.readManifest(sessionId);
+      if (!manifest) {
+        const manifestKey = `sessions/${sessionId}/session.json`;
+        try {
+          const response = await s3Client.send(
+            new GetObjectCommand({
+              Bucket: config.minio.bucket,
+              Key: manifestKey
+            })
+          );
+          const body = await streamToString(response.Body as Readable);
+          manifest = JSON.parse(body) as SessionManifest;
+        } catch {
+          reply.code(404).send({ error: "session recording not found" });
+          return;
+        }
+      }
+
+      reply.send(buildStemExportManifest(manifest));
     }
   );
 
@@ -648,12 +871,32 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
     }
   });
 
-  setupSyncPlane(server.server, config);
+  const roomStates = new Map<string, RoomSyncState>();
+  setupSyncPlane(server.server, config, roomStates);
 
   return server;
 };
 
-const setupSyncPlane = (httpServer: import("http").Server, config: AppConfig) => {
+const normalizeRoomState = (input: SyncRoomStateMessage): RoomSyncState => {
+  const mixer = (input.mixer ?? []).slice(0, 4).map((channel) => ({
+    identity: channel.identity,
+    channel: Math.min(Math.max(Math.round(channel.channel), 1), 4) as 1 | 2 | 3 | 4,
+    gain: clampGain(channel.gain),
+    pan: clampPan(channel.pan),
+    mute: Boolean(channel.mute)
+  }));
+  return {
+    mixer,
+    participantLoops: input.participantLoops ?? {},
+    sessionLoop: Boolean(input.sessionLoop)
+  };
+};
+
+const setupSyncPlane = (
+  httpServer: import("http").Server,
+  config: AppConfig,
+  roomStates: Map<string, RoomSyncState>
+) => {
   const wss = new WebSocketServer({ server: httpServer, path: "/sync" });
   const clients = new Map<WebSocket, SyncClient>();
   const rooms = new Map<string, Set<WebSocket>>();
@@ -730,7 +973,14 @@ const setupSyncPlane = (httpServer: import("http").Server, config: AppConfig) =>
         }
         rooms.get(join.room)?.add(socket);
 
-        sendJson(socket, { type: "joined", room: join.room, role: join.role, isMaster: client.isMaster });
+        const existingRoomState = roomStates.get(join.room) ?? defaultRoomSyncState();
+        sendJson(socket, {
+          type: "joined",
+          room: join.room,
+          role: join.role,
+          isMaster: client.isMaster,
+          roomState: existingRoomState
+        });
         return;
       }
 
@@ -777,6 +1027,26 @@ const setupSyncPlane = (httpServer: import("http").Server, config: AppConfig) =>
           quantum: state.quantum,
           beat: state.beat,
           phase: state.phase,
+          at: Date.now()
+        });
+        return;
+      }
+
+      if (message.type === "roomState") {
+        const roomState = message as SyncRoomStateMessage;
+        if (!client.room) {
+          sendJson(socket, { type: "error", error: "not joined" });
+          return;
+        }
+        if (!client.isMaster) {
+          sendJson(socket, { type: "error", error: "not authorized" });
+          return;
+        }
+        const normalized = normalizeRoomState(roomState);
+        roomStates.set(client.room, normalized);
+        broadcast(client.room, {
+          type: "roomState",
+          ...normalized,
           at: Date.now()
         });
         return;
