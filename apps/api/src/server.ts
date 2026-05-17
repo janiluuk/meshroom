@@ -15,6 +15,11 @@ import type { AppConfig } from "./config";
 import type { ActiveSession, ActiveTrack, SessionManifest, SyncMode } from "./manifest";
 import { toManifest } from "./manifest";
 import { createStore, type Store, type StoredUser } from "./store";
+import {
+  loadEveryNoiseCatalog,
+  pickRandomEveryNoiseGenre,
+  searchEveryNoiseGenres
+} from "./everynoise.js";
 import { WebSocketServer, WebSocket } from "ws";
 import type { RawData } from "ws";
 
@@ -203,6 +208,25 @@ export const buildServer = (config: AppConfig, deps: Partial<ServerDeps> = {}) =
   server.get("/ping", async () => ({
     status: "ok",
     now: Date.now()
+  }));
+
+  server.get("/grooves/genres", async (request) => {
+    const query = request.query as { q?: string; limit?: string };
+    const q = typeof query.q === "string" ? query.q : "";
+    const limitRaw = typeof query.limit === "string" ? Number(query.limit) : 30;
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 30;
+    const catalog = loadEveryNoiseCatalog();
+    const result = searchEveryNoiseGenres(q, limit);
+    return {
+      genres: result.genres,
+      total: result.total,
+      catalogTotal: catalog.total,
+      source: catalog.source
+    };
+  });
+
+  server.get("/grooves/genres/random", async () => ({
+    genre: pickRandomEveryNoiseGenre()
   }));
 
   server.post("/auth/login", async (request, reply) => {

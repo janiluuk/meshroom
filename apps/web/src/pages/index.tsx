@@ -1,6 +1,11 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  buildGenreLoopProfile,
+  GenreLoopPlayer,
+  type GenreLoopProfile
+} from "../lib/genreLoop";
+import {
   ConnectionQuality,
   Room,
   RoomEvent,
@@ -97,6 +102,17 @@ type JoinResponse = {
   room: string;
   session: SessionListItem;
   role: Role;
+};
+
+type GenreSearchResponse = {
+  genres: string[];
+  total: number;
+  catalogTotal: number;
+  source: string;
+};
+
+type RandomGenreResponse = {
+  genre: string;
 };
 
 type LinkProxyState = {
@@ -648,6 +664,14 @@ const HomePage = () => {
   const [syncJitterMs, setSyncJitterMs] = useState<number | undefined>(undefined);
   const [syncQuantum, setSyncQuantum] = useState(4);
   const [metronomeOn, setMetronomeOn] = useState(false);
+  const [genreQuery, setGenreQuery] = useState("");
+  const [genreResults, setGenreResults] = useState<string[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState("");
+  const [genreSearchError, setGenreSearchError] = useState<string | null>(null);
+  const [loopGenre, setLoopGenre] = useState("");
+  const [genreLoopProfile, setGenreLoopProfile] = useState<GenreLoopProfile | null>(null);
+  const [backgroundLoopOn, setBackgroundLoopOn] = useState(false);
+  const [genreLoopBusy, setGenreLoopBusy] = useState(false);
   const [linkProxyStatus, setLinkProxyStatus] = useState<LinkProxyStatus>("idle");
   const [linkProxyState, setLinkProxyState] = useState<LinkProxyState | null>(null);
   const [linkProxyError, setLinkProxyError] = useState<string | null>(null);
@@ -661,6 +685,7 @@ const HomePage = () => {
   const metronomeContextRef = useRef<AudioContext | null>(null);
   const metronomeIntervalRef = useRef<number | null>(null);
   const metronomeBeatRef = useRef(0);
+  const genreLoopPlayerRef = useRef<GenreLoopPlayer | null>(null);
   const linkProxyRef = useRef<WebSocket | null>(null);
   const syncModeRef = useRef<SyncMode>(syncMode);
   const linkProxyStatusRef = useRef<LinkProxyStatus>(linkProxyStatus);
@@ -943,6 +968,64 @@ const HomePage = () => {
     tick();
     metronomeIntervalRef.current = window.setInterval(tick, intervalMs);
   }, [syncTempo, syncQuantum]);
+
+  const ensureGenreLoopPlayer = useCallback(() => {
+    if (!genreLoopPlayerRef.current) {
+      genreLoopPlayerRef.current = new GenreLoopPlayer();
+    }
+    return genreLoopPlayerRef.current;
+  }, []);
+
+  const stopBackgroundLoop = useCallback(() => {
+    setBackgroundLoopOn(false);
+    genreLoopPlayerRef.current?.stop();
+  }, []);
+
+  const searchGenres = useCallback(async (query: string) => {
+    setGenreSearchError(null);
+    try {
+      const params = new URLSearchParams();
+      if (query.trim()) {
+        params.set("q", query.trim());
+      }
+      params.set("limit", "24");
+      const response = await fetchJson<GenreSearchResponse>(
+        `${apiBaseUrl}/grooves/genres?${params.toString()}`
+      );
+      setGenreResults(response.genres);
+    } catch (error) {
+      setGenreResults([]);
+      setGenreSearchError(error instanceof Error ? error.message : "Genre search failed.");
+    }
+  }, []);
+
+  const pickRandomGenre = useCallback(async () => {
+    setGenreLoopBusy(true);
+    setGenreSearchError(null);
+    try {
+      const response = await fetchJson<RandomGenreResponse>(`${apiBaseUrl}/grooves/genres/random`);
+      setSelectedGenre(response.genre);
+      setGenreQuery(response.genre);
+      setLoopGenre(response.genre);
+      setGenreLoopProfile(buildGenreLoopProfile(response.genre, syncTempo));
+    } catch (error) {
+      setGenreSearchError(error instanceof Error ? error.message : "Could not pick a random genre.");
+    } finally {
+      setGenreLoopBusy(false);
+    }
+  }, [syncTempo]);
+
+  const generateBackgroundLoop = useCallback(() => {
+    const genre = (selectedGenre || genreQuery).trim();
+    if (!genre) {
+      setGenreSearchError("Pick or type a genre from Every Noise at Once.");
+      return;
+    }
+    setGenreSearchError(null);
+    setLoopGenre(genre);
+    setSelectedGenre(genre);
+    setGenreLoopProfile(buildGenreLoopProfile(genre, syncTempo));
+  }, [genreQuery, selectedGenre, syncTempo]);
 
   const enableMidi = async () => {
     setMidiError(null);
@@ -1465,6 +1548,45 @@ const HomePage = () => {
 
   useEffect(() => {
     if (!isConnected) {
+      stopBackgroundLoop();
+      setLoopGenre("");
+      setGenreLoopProfile(null);
+      setGenreQuery("");
+      setGenreResults([]);
+      setSelectedGenre("");
+    }
+  }, [isConnected, stopBackgroundLoop]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      searchGenres(genreQuery).catch(() => undefined);
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [genreQuery, searchGenres]);
+
+  useEffect(() => {
+    if (!backgroundLoopOn || !loopGenre) {
+      genreLoopPlayerRef.current?.stop();
+      return;
+    }
+    const profile = buildGenreLoopProfile(loopGenre, syncTempo);
+    setGenreLoopProfile(profile);
+    ensureGenreLoopPlayer().start(profile);
+    return () => {
+      genreLoopPlayerRef.current?.stop();
+    };
+  }, [backgroundLoopOn, loopGenre, syncTempo, ensureGenreLoopPlayer]);
+
+  useEffect(
+    () => () => {
+      genreLoopPlayerRef.current?.dispose();
+      genreLoopPlayerRef.current = null;
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!isConnected) {
       setApiRttMs(undefined);
       setApiPingError(false);
       return;
@@ -1727,6 +1849,7 @@ const HomePage = () => {
           </div>
         </div>
         {isConnected ? (
+          <>
           <div className="sync-panel">
             <div className="sync-panel-header">
               <div>
@@ -1872,6 +1995,109 @@ const HomePage = () => {
             </div>
             {linkProxyError ? <div style={{ color: "var(--danger)" }}>{linkProxyError}</div> : null}
           </div>
+
+          <div className="groove-panel">
+            <div className="sync-panel-header">
+              <div>
+                <div className="section-title">Background loop</div>
+                <div className="help-text">
+                  Procedural jam loop from an{" "}
+                  <a href="https://everynoise.com/" target="_blank" rel="noreferrer">
+                    Every Noise
+                  </a>{" "}
+                  genre. Local preview only — not recorded.
+                </div>
+              </div>
+              <span className={backgroundLoopOn ? "status-pill active-pill" : "status-pill"}>
+                {backgroundLoopOn ? "Playing" : "Stopped"}
+              </span>
+            </div>
+            <div className="form-grid">
+              <div className="field">
+                <label htmlFor="genre-search">Genre (Every Noise)</label>
+                <input
+                  id="genre-search"
+                  list="everynoise-genres"
+                  value={genreQuery}
+                  onChange={(event) => {
+                    setGenreQuery(event.target.value);
+                    setSelectedGenre(event.target.value);
+                  }}
+                  placeholder="e.g. acid jazz, lo-fi beats, neo soul"
+                />
+                <datalist id="everynoise-genres">
+                  {genreResults.map((genre) => (
+                    <option key={genre} value={genre} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="field">
+                <label>Actions</label>
+                <div className="recording-row">
+                  <button type="button" onClick={() => pickRandomGenre()} disabled={genreLoopBusy}>
+                    Random genre
+                  </button>
+                  <button type="button" onClick={() => generateBackgroundLoop()} disabled={genreLoopBusy}>
+                    Generate loop
+                  </button>
+                  <button
+                    type="button"
+                    className={backgroundLoopOn ? "toggle active" : "toggle"}
+                    onClick={() => {
+                      const genre = (loopGenre || selectedGenre || genreQuery).trim();
+                      if (!genre) {
+                        setGenreSearchError("Pick or type a genre, then generate or play.");
+                        return;
+                      }
+                      if (!loopGenre) {
+                        setLoopGenre(genre);
+                        setSelectedGenre(genre);
+                        setGenreLoopProfile(buildGenreLoopProfile(genre, syncTempo));
+                      }
+                      setGenreSearchError(null);
+                      setBackgroundLoopOn((value) => !value);
+                    }}
+                    disabled={genreLoopBusy}
+                  >
+                    {backgroundLoopOn ? "Stop loop" : "Play loop"}
+                  </button>
+                  {backgroundLoopOn ? (
+                    <button type="button" onClick={() => stopBackgroundLoop()}>
+                      Mute
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            {genreLoopProfile ? (
+              <div className="sync-readout">
+                <div>
+                  <span>Genre</span>
+                  <strong>{genreLoopProfile.genre}</strong>
+                </div>
+                <div>
+                  <span>Loop BPM</span>
+                  <strong>{genreLoopProfile.bpm}</strong>
+                </div>
+                <div>
+                  <span>Session BPM</span>
+                  <strong>{syncTempo}</strong>
+                </div>
+                <div>
+                  <span>Feel</span>
+                  <strong>
+                    {genreLoopProfile.swing > 0.25
+                      ? "swung"
+                      : genreLoopProfile.density < 0.35
+                        ? "sparse"
+                        : "steady"}
+                  </strong>
+                </div>
+              </div>
+            ) : null}
+            {genreSearchError ? <div style={{ color: "var(--danger)" }}>{genreSearchError}</div> : null}
+          </div>
+          </>
         ) : null}
 
         {!currentUser ? (
