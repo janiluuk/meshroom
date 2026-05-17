@@ -1,0 +1,12 @@
+{
+  "name": "@remote-dj/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test --project=api"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.1"
+  }
+}

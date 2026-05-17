@@ -8,10 +8,14 @@ export type ReconnectMarker = {
   reason?: string;
 };
 
+export type AudioChannelRole = "MUSIC_IN" | "VOICE" | "MIX";
+
 export type TrackManifest = {
   participantIdentity: string;
   participantName?: string;
   kind: "audio";
+  trackId?: string;
+  channel?: AudioChannelRole;
   url: string;
   container: string;
   codec: string;
@@ -23,27 +27,49 @@ export type TrackManifest = {
 
 export type SyncMode = "LINK_LAN" | "LINK_WAN" | "MIDI";
 
+export type SyncTimelineEntry = {
+  at: string;
+  mode: SyncMode;
+  tempo?: number;
+};
+
+export type LoopMarker = {
+  id: string;
+  participantIdentity?: string;
+  startBar?: number;
+  endBar?: number;
+  label?: string;
+};
+
+export type OverdubMarker = {
+  id: string;
+  participantIdentity?: string;
+  at: string;
+  label?: string;
+};
+
 export type SessionManifest = {
   sessionId: string;
   room: string;
   syncMode: SyncMode;
+  syncTimeline?: SyncTimelineEntry[];
   startedAt: string;
   endedAt?: string;
+  bpm?: number;
+  quantization?: number;
   participants: ParticipantManifest[];
   tracks: TrackManifest[];
+  loops?: LoopMarker[];
+  roomMixLoops?: LoopMarker[];
+  overdubs?: OverdubMarker[];
   masterMixUrl?: string;
+  projectRevisionId?: string;
+  projectId?: string;
+  daw?: "ableton" | "flstudio";
+  projectName?: string;
 };
 
-export type ActiveTrack = {
-  participantIdentity: string;
-  participantName?: string;
-  kind: "audio";
-  url: string;
-  container: string;
-  codec: string;
-  startedAt: string;
-  endedAt?: string;
-  reconnects: ReconnectMarker[];
+export type ActiveTrack = TrackManifest & {
   egressId: string;
   fileKey: string;
 };
@@ -65,13 +91,25 @@ export const toManifest = (session: ActiveSession): SessionManifest => ({
   sessionId: session.sessionId,
   room: session.room,
   syncMode: session.syncMode,
+  syncTimeline: session.syncTimeline,
   startedAt: session.startedAt,
   endedAt: session.endedAt,
+  bpm: session.bpm,
+  quantization: session.quantization,
   participants: session.participants,
+  projectRevisionId: session.projectRevisionId,
+  projectId: session.projectId,
+  daw: session.daw,
+  projectName: session.projectName,
+  loops: session.loops ?? [],
+  roomMixLoops: session.roomMixLoops ?? [],
+  overdubs: session.overdubs ?? [],
   tracks: session.tracks.map((track) => ({
     participantIdentity: track.participantIdentity,
     participantName: track.participantName,
     kind: "audio",
+    trackId: track.trackId,
+    channel: track.channel,
     url: track.url,
     container: track.container,
     codec: track.codec,
@@ -82,3 +120,10 @@ export const toManifest = (session: ActiveSession): SessionManifest => ({
   })),
   masterMixUrl: session.masterMixUrl
 });
+
+export const inferAudioChannel = (audioIndex: number, totalAudio: number): AudioChannelRole => {
+  if (totalAudio <= 1) {
+    return "MIX";
+  }
+  return audioIndex === 0 ? "MUSIC_IN" : "VOICE";
+};

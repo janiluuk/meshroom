@@ -1,0 +1,17 @@
+{
+  "sessionId": "3de26dc9-b6ae-4dfd-9c70-93af82fb438a",
+  "room": "3de26dc9-b6ae-4dfd-9c70-93af82fb438a",
+  "syncMode": "LINK_LAN",
+  "startedAt": "2026-05-17T00:00:00.000Z",
+  "bpm": 120,
+  "quantization": 4,
+  "participants": [
+    {
+      "identity": "host"
+    }
+  ],
+  "tracks": [],
+  "loops": [],
+  "roomMixLoops": [],
+  "overdubs": []
+}

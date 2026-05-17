@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ableton MajorVersion="12" MinorVersion="1">
+  <LiveSet>
+    <Tempo><Manual Value="128" /></Tempo>
+    <TimeSignature><Numerator Value="4" /><Denominator Value="4" /></TimeSignature>
+    <Tracks>
+      <MidiTrack Id="0">
+        <Name><EffectiveName Value="Bass" /></Name>
+        <ColorIndex Value="5" />
+        <DeviceChain>
+          <MainSequencer>
+            <ClipTimeable>
+              <ArrangerAutomation>
+                <Events>
+                  <MidiClip Id="0">
+                    <Name Value="Bass loop" />
+                    <CurrentStart Value="0" />
+                    <CurrentEnd Value="16" />
+                    <ColorIndex Value="5" />
+                  </MidiClip>
+                </Events>
+              </ArrangerAutomation>
+            </ClipTimeable>
+          </MainSequencer>
+          <DeviceChain>
+            <Operator Id="0">
+              <UserName Value="Bass Synth" />
+            </Operator>
+          </DeviceChain>
+        </DeviceChain>
+      </MidiTrack>
+      <AudioTrack Id="1">
+        <Name><EffectiveName Value="Drums" /></Name>
+        <ColorIndex Value="2" />
+      </AudioTrack>
+    </Tracks>
+  </LiveSet>
+</Ableton>

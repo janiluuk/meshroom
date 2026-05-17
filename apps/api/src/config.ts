@@ -21,6 +21,13 @@ export type AppConfig = {
   programOutUrl: string;
   masterKey: string;
   storePath: string;
+  daw: {
+    projectsStorePath: string;
+    maxUploadBytes: number;
+    maxRevisionsPerProject: number;
+    flpParserScript: string;
+    timeshiftDir: string;
+  };
 };
 
 const parseBoolean = (value: string | undefined, defaultValue: boolean) => {
@@ -73,6 +80,13 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): AppConfig => {
     },
     programOutUrl: env.PROGRAM_OUT_RTMP_URL ?? "",
     masterKey: env.MASTER_KEY ?? env.MASTER_API_KEY ?? "",
-    storePath: env.STORE_PATH ?? ".data/remote-dj.json"
+    storePath: env.STORE_PATH ?? ".data/remote-dj.json",
+    daw: {
+      projectsStorePath: env.DAW_PROJECTS_STORE_PATH ?? ".data/daw-projects.json",
+      maxUploadBytes: parseNumber(env.DAW_MAX_UPLOAD_BYTES, 52_428_800),
+      maxRevisionsPerProject: parseNumber(env.DAW_MAX_REVISIONS_PER_PROJECT, 50),
+      flpParserScript: env.DAW_FLP_PARSER_SCRIPT ?? "",
+      timeshiftDir: env.TIMESHIFT_DIR ?? "timeshift"
+    }
   };
 };

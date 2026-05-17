@@ -2,9 +2,9 @@ import { buildServer } from "./server";
 import { loadConfig } from "./config";
 
 const config = loadConfig();
-const server = buildServer(config);
 
 const start = async () => {
+  const server = await buildServer(config);
   try {
     await server.listen({
       port: config.server.port,

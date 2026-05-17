@@ -35,6 +35,19 @@ jobs:
       - name: Web build
         run: pnpm --filter @remote-dj/web build
 
+      - name: Install e2e dependencies
+        run: npm install --prefix e2e
+
+      - name: Install Playwright
+        run: npm exec --prefix e2e playwright install chromium --with-deps
+
+      - name: E2E API tests
+        run: npm run test:e2e:api
+        env:
+          CI: "true"
+          E2E_API_PORT: "3456"
+          API_BASE_URL: "http://127.0.0.1:3456"
+
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test

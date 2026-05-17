@@ -26,7 +26,7 @@ describe("/auth/token", () => {
       PROGRAM_OUT_RTMP_URL: "rtmp://localhost/live"
     });
 
-    const server = buildServer(config, {
+    const server = await buildServer(config, {
       store: createStore({ filePath: "memory", persist: false, now: () => new Date("2024-01-01T00:00:00.000Z") }),
       roomService: { listParticipants: async () => [] },
       egressClient: {

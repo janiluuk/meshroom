@@ -39,19 +39,27 @@ describe("manifest creation", () => {
       sessionId: "session-123",
       room: "room-a",
       syncMode: "LINK_LAN",
+      syncTimeline: undefined,
       startedAt: "2024-01-01T00:00:00.000Z",
       endedAt: "2024-01-01T00:05:00.000Z",
+      bpm: undefined,
+      quantization: undefined,
       participants: [
         {
           identity: "alice",
           name: "Alice"
         }
       ],
+      loops: [],
+      roomMixLoops: [],
+      overdubs: [],
       tracks: [
         {
           participantIdentity: "alice",
           participantName: "Alice",
           kind: "audio",
+          trackId: undefined,
+          channel: undefined,
           url: "http://minio/sessions/session-123/alice/audio.mp4",
           container: "mp4",
           codec: "aac",
@@ -61,7 +69,11 @@ describe("manifest creation", () => {
           startOffsetMs: 1000
         }
       ],
-      masterMixUrl: undefined
+      masterMixUrl: undefined,
+      projectRevisionId: undefined,
+      projectId: undefined,
+      daw: undefined,
+      projectName: undefined
     });
   });
 });

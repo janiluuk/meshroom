@@ -53,7 +53,7 @@ Legend: **done** · **partial** · **missing** · **stub**
 | Vital / Arturia / Serum default maps | planned | missing | README line 48 |
 | OSC listener (`127.0.0.1:9123`) | ✓ | missing | Documented in README/M4L README; not in sync-bridge |
 | Local MIDI bridge to Ableton | — | missing | Help text: “until a local bridge ships” |
-| **DAW project management (Ableton + FL)** | — | missing | **[roadmap-daw-projects.md](./roadmap-daw-projects.md)** |
+| **DAW project management (Ableton + FL)** | — | partial | **[roadmap-daw-projects.md](./roadmap-daw-projects.md)** (phases A–D) |
 
 ### Recording, export & playback
 
@@ -88,17 +88,18 @@ Legend: **done** · **partial** · **missing** · **stub**
 
 ## Phased roadmap
 
-### Phase 1 — Complete the live session MVP
+### Phase 1 — Complete the live session MVP (partial)
 
-- Copy session link, session create (BPM + quantization)
-- 4-channel mixer (UI + state synced over sync plane)
-- Per-participant and session looping controls
-- Wire **timeshift** (API + UI): snapshot on record/stop, restore in session
-- Fix manifest schema + recording to match timeshift samples
-- Separate **voice** vs **music** audio egress per participant
+- Copy session link, session create (BPM + quantization) — **done**
+- 4-channel mixer (UI + state synced over sync plane) — **done**
+- Per-participant and session looping controls — **done** (sync state; audio routing TBD)
+- Wire **timeshift** (API + UI): snapshot on record/stop, restore in session — **done**
+- Fix manifest schema + recording to match timeshift samples — **done**
+- Separate **voice** vs **music** audio egress per participant — **done** (up to 2 audio tracks)
 
-### Phase 2 — DAW & MIDI depth
+### Phase 2 — DAW & MIDI depth (partial)
 
+- Stem export manifest (`GET /sessions/:id/export`) — **done**
 - OSC listener in sync-bridge; preset/param → WebUI
 - MIDI mapping UI + named snapshots (per synth)
 - Omnichannel mode; synth default presets (Vital, Arturia, Serum)
@@ -120,11 +121,11 @@ Host and analyze **Ableton Live** (`.als`) and **FL Studio** (`.flp`) projects: 
 | **C** | Project library, revision diff, timeshift linkage |
 | **D** | Export checklist, E2E, collaboration polish |
 
-### Phase 4 — Distribution & scale
+### Phase 4 — Distribution & scale (partial)
 
 - Cross-platform installer (Docker optional)
 - Redis for recording state / multi-instance API
-- Playwright E2E suite in CI (see [E2E test plan](#e2e-test-plan-missing))
+- Playwright E2E suite in CI — **scaffold** (`e2e/`, optional CI job; run with `E2E_STACK=1`)
 
 ---
 
@@ -173,7 +174,7 @@ Host and analyze **Ableton Live** (`.als`) and **FL Studio** (`.flp`) projects: 
 | MIDI CH 2–5 / Omnichannel | partial |
 | Export + processing | partial / missing |
 | Timeshift (git) | partial |
-| **DAW project management (Ableton + FL)** | **missing ([roadmap](./roadmap-daw-projects.md))** |
+| **DAW project management (Ableton + FL)** | **partial ([roadmap](./roadmap-daw-projects.md) A–D)** |
 
 ---
 

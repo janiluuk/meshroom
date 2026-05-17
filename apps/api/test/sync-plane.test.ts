@@ -49,7 +49,7 @@ describe("sync plane", () => {
       HOST: "127.0.0.1"
     });
 
-    const server = buildServer(config, {
+    const server = await buildServer(config, {
       store: createStore({ filePath: "memory", persist: false }),
       roomService: { listParticipants: async () => [] },
       egressClient: {
